@@ -1,0 +1,33 @@
+"""LLM model configuration."""
+
+# Model selection
+MODEL_NAME: str = "gpt-4"
+MODEL_VERSION: str = "gpt-4-turbo"
+
+# API configuration
+API_TIMEOUT: int = 10
+MAX_RETRIES: int = 3
+RETRY_BACKOFF: float = 1.0
+
+# Temperature and sampling
+TEMPERATURE: float = 0.7
+TOP_P: float = 0.9
+FREQUENCY_PENALTY: float = 0.0
+PRESENCE_PENALTY: float = 0.0
+
+# Token limits
+MAX_INPUT_TOKENS: int = 2000
+MAX_OUTPUT_TOKENS: int = 500
+
+# Safety
+ENABLE_SAFETY_VALIDATION: bool = True
+SAFETY_CONSTRAINT_ENFORCEMENT: str = "strict"  # strict, moderate, permissive
+
+# Decision thresholds
+MIN_CONFIDENCE_THRESHOLD: float = 0.5
+DECISION_TIMEOUT_SEC: int = 5
+
+# Prompt engineering
+USE_SYSTEM_PROMPT: bool = True
+USE_EXAMPLES: bool = True
+EXAMPLE_COUNT: int = 3

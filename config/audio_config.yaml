@@ -1,0 +1,37 @@
+"""Audio processing configuration."""
+
+# Feature extraction parameters
+SAMPLE_RATE: int = 16000
+FFT_SIZE: int = 2048
+HOP_LENGTH: int = 512
+N_MELS: int = 128
+N_MFCC: int = 13
+
+# Processing parameters
+MIN_AUDIO_LENGTH_MS: float = 10.0
+MAX_AUDIO_LENGTH_MS: float = 10000.0
+DECISION_INTERVAL_SEC: float = 1.0
+
+# Feature thresholds
+SILENCE_THRESHOLD_DB: float = 30.0
+SPEECH_PROBABILITY_THRESHOLD: float = 0.5
+NOISE_FLOOR_PERCENTILE: float = 10.0
+
+# Processing modes
+MODES = {
+    'battery_saver': {
+        'processing_interval': 5.0,
+        'max_complexity': 'low',
+        'feature_count': 'minimal'
+    },
+    'normal': {
+        'processing_interval': 1.0,
+        'max_complexity': 'medium',
+        'feature_count': 'standard'
+    },
+    'performance': {
+        'processing_interval': 0.5,
+        'max_complexity': 'high',
+        'feature_count': 'full'
+    }
+}
