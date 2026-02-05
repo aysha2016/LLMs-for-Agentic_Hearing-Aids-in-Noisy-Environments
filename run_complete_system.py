@@ -14,7 +14,9 @@ This demonstrates:
 
 import numpy as np
 import time
+import os
 from datetime import datetime
+from scipy.io import wavfile
 from src.hearing_aid.controller import HearingAidController
 from src.hearing_aid.profiles import UserProfile
 from src.llm.decision_engine import DecisionEngine
@@ -172,9 +174,10 @@ def run_complete_oral_loop(audio, scenario_name, controller, decision_engine):
     
     print(f"   ✓ Processing complete ({act_time:.3f}s)")
     
+    processed_audio = None
     if result['status'] == 'success':
-        processed = result['processed_audio']
-        print(f"   ✓ Output audio shape: {processed.shape}")
+        processed_audio = result['processed_audio']
+        print(f"   ✓ Output audio shape: {processed_audio.shape}")
         print(f"   ✓ Processing successful!")
     
     # ========================================================================
@@ -232,6 +235,7 @@ def run_complete_oral_loop(audio, scenario_name, controller, decision_engine):
         'decision': decision,
         'safety': safety_check,
         'feedback': feedback,
+        'processed_audio': processed_audio,
         'timing': {
             'observe': observe_time,
             'reason': reason_time,
@@ -300,6 +304,34 @@ def main():
             controller.decision_engine
         )
         results.append(result)
+    
+    # ========================================================================
+    # SAVE PROCESSED AUDIO FILES
+    # ========================================================================
+    print_header("SAVING PROCESSED AUDIO FILES", "═")
+    
+    # Create output directory
+    output_dir = "output_audio"
+    os.makedirs(output_dir, exist_ok=True)
+    
+    sample_rate = 16000
+    saved_count = 0
+    
+    for result in results:
+        if result['processed_audio'] is not None:
+            scenario = result['scenario']
+            filename = f"{output_dir}/processed_{scenario}.wav"
+            
+            # Normalize audio to int16 range
+            audio_data = result['processed_audio']
+            audio_normalized = np.int16(audio_data / np.max(np.abs(audio_data)) * 32767)
+            
+            # Save as WAV file
+            wavfile.write(filename, sample_rate, audio_normalized)
+            print(f"   ✓ Saved: {filename}")
+            saved_count += 1
+    
+    print(f"\\n   ✅ Successfully saved {saved_count} audio files to '{output_dir}/' directory")
     
     # ========================================================================
     # FINAL SYSTEM STATISTICS
