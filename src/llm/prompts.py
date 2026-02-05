@@ -1,6 +1,7 @@
 """Prompt building for LLM decision making - Observe-Reason-Act-Learn loop."""
 
 from typing import Dict, Optional
+from src.audio.features import AudioFeatureSet
 
 
 class PromptBuilder:
@@ -234,21 +235,36 @@ Now provide your decision:
         Build prompt analyzing audio context.
         
         Args:
-            features: Extracted audio features
+            features: Extracted audio features (AudioFeatureSet or dict)
             user_profile: User preferences and hearing profile
         
         Returns:
             Complete prompt for LLM
         """
+        # Convert AudioFeatureSet to dict if needed
+        if hasattr(features, 'to_dict'):
+            features_dict = features.to_dict()
+        else:
+            features_dict = features
+        
+        # Safely extract feature values with defaults
+        noise_level = features_dict.get('noise_level_db', 60.0)
+        if isinstance(noise_level, dict):
+            noise_level = noise_level.get('value', 60.0)
+        
+        speech_prob = features_dict.get('speech_confidence', 0.5)
+        if isinstance(speech_prob, dict):
+            speech_prob = speech_prob.get('value', 0.5)
+        
         context = f"""
 Analyze the following audio environment and recommend a hearing aid processing strategy.
 
 AUDIO ENVIRONMENT:
-- Scene: {features.get('acoustic_scene', 'Unknown')}
-- Noise Level: {features.get('noise_level_db', 60.0):.1f} dB
-- Speech Probability: {features.get('speech_confidence', 0.5)*100:.0f}%
-- Sound Event: {features.get('sound_event_class', 'Unknown')}
-- Silence Detected: {features.get('is_silence', False)}
+- Scene: {features_dict.get('acoustic_scene', 'Unknown')}
+- Noise Level: {float(noise_level):.1f} dB
+- Speech Probability: {float(speech_prob)*100:.0f}%
+- Sound Event: {features_dict.get('sound_event_class', 'Unknown')}
+- Silence Detected: {features_dict.get('is_silence', False)}
 
 USER PROFILE:
 - Hearing Loss Pattern: {user_profile.get('hearing_loss_profile', 'Normal')}

@@ -92,7 +92,7 @@ class HearingAidController:
         should_decide = force_decision or self._should_make_decision()
         
         if should_decide and use_llm_decision:
-            strategy_dict = self.decision_engine.decide_strategy(
+            strategy_dict = self.decision_engine._decide_strategy_llm(
                 features,
                 self.user_profile.to_dict()
             )

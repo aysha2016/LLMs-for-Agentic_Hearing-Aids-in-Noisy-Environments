@@ -141,13 +141,30 @@ class DecisionEngine:
         """
         logger.debug("OBSERVE: Gathering context...")
         
-        # Extract safe, high-level features
-        acoustic_scene = features.get('acoustic_scene', 'unknown')
-        noise_level = features.get('noise_level_db', 60.0)
-        speech_confidence = features.get('speech_confidence', 0.5)
-        speech_present = features.get('speech_present', False)
-        asr_transcript = features.get('asr_transcript', None)
-        noise_type = features.get('noise_type', 'unknown')
+        # Extract safe, high-level features from AudioFeatureSet object
+        # Convert to dict if needed for easy access
+        if hasattr(features, 'to_dict'):
+            features_dict = features.to_dict()
+        elif isinstance(features, dict):
+            features_dict = features
+        else:
+            # Fallback: try attribute access
+            acoustic_scene = getattr(features, 'sound_event_class', 'unknown')
+            noise_level = getattr(features, 'noise_level_db', 60.0)
+            speech_confidence = getattr(features, 'speech_probability', 0.5)
+            speech_present = getattr(features, 'is_speech_present', False)
+            asr_transcript = getattr(features, 'asr_transcript', None)
+            noise_type = getattr(features, 'noise_type', 'unknown')
+            features_dict = {}
+        
+        if features_dict:
+            # Extract from dict
+            acoustic_scene = features_dict.get('sound_event_class', 'unknown')
+            noise_level = features_dict.get('noise_level_db', 60.0)
+            speech_confidence = features_dict.get('speech_probability', 0.5) or features_dict.get('speech_confidence', 0.5)
+            speech_present = features_dict.get('is_speech_present', False)
+            asr_transcript = features_dict.get('asr_transcript', None)
+            noise_type = features_dict.get('noise_type', 'unknown')
         
         # Gather user context
         hearing_loss_profile = user_profile.get('hearing_loss_profile', {})
@@ -162,9 +179,9 @@ class DecisionEngine:
         
         # Device state (not waveform data)
         device_state = {
-            'battery_percent': features.get('battery_level', 100),
-            'temperature_celsius': features.get('device_temp', 25.0),
-            'processing_load': features.get('cpu_usage', 30)
+            'battery_percent': 100,
+            'temperature_celsius': 25.0,
+            'processing_load': 30
         }
         
         # Recent actions for stability checking
@@ -172,9 +189,9 @@ class DecisionEngine:
         
         observation = ObservationContext(
             acoustic_scene=acoustic_scene,
-            noise_level_db=noise_level,
-            speech_confidence=speech_confidence,
-            speech_presence=speech_present,
+            noise_level_db=float(noise_level),
+            speech_confidence=float(speech_confidence),
+            speech_presence=bool(speech_present),
             asr_transcript=asr_transcript,
             noise_type=noise_type,
             hearing_loss_profile=hearing_loss_profile,
@@ -388,14 +405,14 @@ class DecisionEngine:
         # TODO: Implement persistent learning mechanism
         logger.debug(f"Strategy {strategy_name} ranking adjustment: {effectiveness:+.2f}")
     
-    def decide_strategy(
+    def _decide_strategy_llm(
         self,
         features: AudioFeatureSet,
         user_profile: Dict
     ) -> Dict:
         """
-        Decide on audio processing strategy based on audio features.
-        
+        Decide on audio processing strategy based on audio features via LLM.
+
         Args:
             features: Extracted audio features
             user_profile: User preferences and hearing profile

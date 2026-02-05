@@ -31,13 +31,16 @@ class TestDecisionEngine:
     
     def test_strategy_decision(self, engine, test_features, user_profile):
         """Test strategy decision making."""
-        decision = engine.decide_strategy(test_features, user_profile.to_dict())
+        decision, safety_check = engine.decide_strategy(test_features, user_profile.to_dict())
         
-        assert isinstance(decision, dict)
-        assert 'noise_suppression_strength' in decision
-        assert 'speech_enhancement_level' in decision
-        assert 'adaptive_gain' in decision
-        assert 'confidence' in decision
+        # Check that we get Decision object and SafetyCheck
+        assert hasattr(decision, 'primary_action')
+        assert hasattr(decision, 'confidence')
+        assert isinstance(decision.primary_action, dict)
+        assert 'noise_suppression_strength' in decision.primary_action
+        assert 'speech_enhancement_strength' in decision.primary_action
+        assert 'compression_ratio' in decision.primary_action
+        assert 'confidence' in decision.__dict__ or decision.confidence is not None
 
 
 class TestSafetyValidator:
@@ -51,13 +54,17 @@ class TestSafetyValidator:
     def test_valid_strategy(self, validator):
         """Test validation of valid strategy."""
         strategy = {
+            'strategy_name': 'balanced_processing',
             'noise_suppression_strength': 0.5,
-            'speech_enhancement_level': 0.5,
-            'dynamic_range_compression_ratio': 3.0,
-            'high_frequency_boost': 2.0,
-            'low_frequency_reduction': -3.0,
-            'adaptive_gain': 1.0,
-            'noise_gate_threshold': -40.0
+            'speech_enhancement_strength': 0.5,
+            'compression_ratio': 3.0,
+            'high_freq_boost_db': 2.0,
+            'low_freq_reduction_db': -3.0,
+            'frequency_profile': 'neutral',
+            'rationale': 'Standard balanced processing for office environment',
+            'confidence': 0.8,
+            'duration_seconds': 30,
+            'is_reversible': True
         }
         
         check = validator.validate_strategy(strategy)
@@ -67,13 +74,17 @@ class TestSafetyValidator:
     def test_invalid_strategy_high_suppression(self, validator):
         """Test detection of invalid noise suppression."""
         strategy = {
+            'strategy_name': 'invalid_high_suppression',
             'noise_suppression_strength': 1.5,  # Too high
-            'speech_enhancement_level': 0.5,
-            'dynamic_range_compression_ratio': 3.0,
-            'high_frequency_boost': 2.0,
-            'low_frequency_reduction': -3.0,
-            'adaptive_gain': 1.0,
-            'noise_gate_threshold': -40.0
+            'speech_enhancement_strength': 0.5,
+            'compression_ratio': 3.0,
+            'high_freq_boost_db': 2.0,
+            'low_freq_reduction_db': -3.0,
+            'frequency_profile': 'neutral',
+            'rationale': 'Test invalid high suppression',
+            'confidence': 0.8,
+            'duration_seconds': 30,
+            'is_reversible': True
         }
         
         check = validator.validate_strategy(strategy)
@@ -83,18 +94,22 @@ class TestSafetyValidator:
     def test_apply_safety_bounds(self, validator):
         """Test safety bounds application."""
         strategy = {
+            'strategy_name': 'clipped_bounds',
             'noise_suppression_strength': 1.5,  # Will be clamped
-            'speech_enhancement_level': -0.5,  # Will be clamped
-            'dynamic_range_compression_ratio': 15.0,  # Will be clamped
-            'high_frequency_boost': 20.0,  # Will be clamped
-            'low_frequency_reduction': -20.0,  # Will be clamped
-            'adaptive_gain': 0.5,  # Valid
-            'noise_gate_threshold': -40.0  # Valid
+            'speech_enhancement_strength': -0.5,  # Will be clamped
+            'compression_ratio': 15.0,  # Will be clamped
+            'high_freq_boost_db': 20.0,  # Will be clamped
+            'low_freq_reduction_db': -20.0,  # Will be clamped
+            'frequency_profile': 'neutral',
+            'rationale': 'Test safety bounds application',
+            'confidence': 0.7,
+            'duration_seconds': 30,
+            'is_reversible': True
         }
         
         safe = validator.apply_safety_bounds(strategy)
         
         assert safe['noise_suppression_strength'] <= validator.MAX_NOISE_SUPPRESSION
-        assert safe['speech_enhancement_level'] >= 0
-        assert safe['dynamic_range_compression_ratio'] <= validator.MAX_COMPRESSION_RATIO
-        assert safe['high_frequency_boost'] <= validator.MAX_HIGH_FREQ_BOOST
+        assert safe['speech_enhancement_strength'] >= 0
+        assert safe['compression_ratio'] <= validator.MAX_COMPRESSION_RATIO
+        assert safe['high_freq_boost_db'] <= validator.MAX_HIGH_FREQ_BOOST
