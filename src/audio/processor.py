@@ -101,35 +101,77 @@ class AudioProcessor:
         strength: float
     ) -> np.ndarray:
         """Apply spectral subtraction-based noise suppression."""
-        # Simple spectral subtraction
-        fft = np.fft.rfft(signal)
-        magnitude = np.abs(fft)
-        phase = np.angle(fft)
-        
-        # Estimate noise floor (quietest frames)
-        frame_energy = magnitude ** 2
-        noise_floor = np.percentile(frame_energy, 10)
-        
-        # Apply spectral subtraction
-        suppressed_mag = magnitude ** 2 - strength * noise_floor
-        suppressed_mag = np.maximum(suppressed_mag, 0.1 * (magnitude ** 2))
-        suppressed_mag = np.sqrt(suppressed_mag)
-        
-        # Reconstruct
-        fft_suppressed = suppressed_mag * np.exp(1j * phase)
-        processed = np.fft.irfft(fft_suppressed, n=len(signal))
-        
-        return processed
+        # Short-time spectral subtraction with overlap-add to reduce musical noise.
+        n_fft = 512
+        hop_length = 160
+        window = np.hanning(n_fft)
+
+        if len(signal) < n_fft:
+            return signal
+
+        # Frame the signal
+        num_frames = 1 + (len(signal) - n_fft) // hop_length
+        frames = np.lib.stride_tricks.as_strided(
+            signal,
+            shape=(num_frames, n_fft),
+            strides=(signal.strides[0] * hop_length, signal.strides[0])
+        )
+        frames = frames * window
+
+        spec = np.fft.rfft(frames, axis=1)
+        magnitude = np.abs(spec)
+        phase = np.angle(spec)
+
+        # Estimate noise floor per frequency bin (lower percentile across frames)
+        noise_floor = np.percentile(magnitude, 10, axis=0)
+
+        # Spectral subtraction with a conservative floor
+        suppressed_mag = magnitude - strength * noise_floor
+        suppressed_mag = np.maximum(suppressed_mag, 0.05 * magnitude)
+
+        # Light temporal smoothing to reduce tonal artifacts
+        if suppressed_mag.shape[0] > 2:
+            kernel = np.array([0.25, 0.5, 0.25], dtype=np.float32)
+            suppressed_mag = np.apply_along_axis(
+                lambda m: np.convolve(m, kernel, mode='same'),
+                axis=0,
+                arr=suppressed_mag
+            )
+
+        spec_suppressed = suppressed_mag * np.exp(1j * phase)
+        frames_out = np.fft.irfft(spec_suppressed, n=n_fft, axis=1) * window
+
+        # Overlap-add reconstruction
+        output_len = (num_frames - 1) * hop_length + n_fft
+        processed = np.zeros(output_len, dtype=np.float32)
+        window_sum = np.zeros(output_len, dtype=np.float32)
+        for i in range(num_frames):
+            start = i * hop_length
+            processed[start:start + n_fft] += frames_out[i]
+            window_sum[start:start + n_fft] += window ** 2
+
+        processed = processed / np.maximum(window_sum, 1e-8)
+        return processed[:len(signal)]
     
     def _apply_noise_gate(self, signal: np.ndarray, threshold_db: float) -> np.ndarray:
         """Apply noise gate to suppress signals below threshold."""
-        rms = np.sqrt(np.mean(signal ** 2))
         threshold_linear = 10 ** (threshold_db / 20)
-        
-        gate = np.where(np.abs(signal) > threshold_linear * 0.1, 1.0, 0.0)
-        # Smooth gate to avoid clicks
-        gate = np.convolve(gate, np.ones(100) / 100, mode='same')
-        
+
+        # Smooth RMS envelope to avoid choppy gating
+        window = int(0.02 * self.sample_rate)
+        window = max(window, 1)
+        rms = np.sqrt(
+            np.convolve(signal ** 2, np.ones(window) / window, mode='same')
+        )
+
+        # Soft-knee gate with a gentle floor for natural decay
+        knee = threshold_linear * 0.5
+        gate = np.clip((rms - threshold_linear) / max(knee, 1e-8), 0.0, 1.0)
+        min_gain = 0.1
+        gate = min_gain + (1.0 - min_gain) * gate
+
+        # Additional smoothing to prevent pumping
+        gate = np.convolve(gate, np.ones(200) / 200, mode='same')
         return signal * gate
     
     def _apply_speech_enhancement(

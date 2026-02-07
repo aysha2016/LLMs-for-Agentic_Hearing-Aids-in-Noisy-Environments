@@ -52,6 +52,20 @@ class ProcessingStrategyLibrary:
                     explanation="Light noise suppression with speech enhancement"
                 )
             ),
+            "clean_speech": StrategyPreset(
+                name="Clean Speech",
+                description="Conservative processing to preserve natural speech",
+                strategy=AudioProcessingStrategy(
+                    noise_suppression_strength=0.35,
+                    speech_enhancement_level=0.2,
+                    dynamic_range_compression_ratio=1.6,
+                    high_frequency_boost=0.8,
+                    low_frequency_reduction=-1.5,
+                    adaptive_gain=1.0,
+                    noise_gate_threshold=-50.0,
+                    explanation="Gentle cleanup for recorded speech while keeping tone natural"
+                )
+            ),
             "busy_office": StrategyPreset(
                 name="Busy Office",
                 description="Moderate processing for busy office with background noise",

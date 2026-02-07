@@ -96,6 +96,7 @@ class HearingAidController:
                 features,
                 self.user_profile.to_dict()
             )
+            strategy_dict = self._clamp_strategy_dict(strategy_dict)
             self.current_strategy = self._dict_to_strategy(strategy_dict)
             self.last_decision_time = time.time()
         elif not self.current_strategy:
@@ -149,7 +150,8 @@ class HearingAidController:
             user_feedback,
             current_strategy_dict
         )
-        
+
+        refined_strategy_dict = self._clamp_strategy_dict(refined_strategy_dict)
         self.current_strategy = self._dict_to_strategy(refined_strategy_dict)
         self.last_decision_time = time.time()
         
@@ -232,6 +234,37 @@ class HearingAidController:
             noise_gate_threshold=strategy_dict.get('noise_gate_threshold', -40.0),
             explanation=strategy_dict.get('rationale', '')
         )
+
+    def _clamp_strategy_dict(self, strategy_dict: Dict) -> Dict:
+        """Clamp LLM strategy values to conservative bounds for natural speech."""
+        clamped = dict(strategy_dict)
+
+        def clamp(value: float, low: float, high: float) -> float:
+            return max(low, min(high, value))
+
+        clamped['noise_suppression_strength'] = clamp(
+            float(clamped.get('noise_suppression_strength', 0.5)), 0.0, 0.6
+        )
+        clamped['speech_enhancement_level'] = clamp(
+            float(clamped.get('speech_enhancement_level', 0.3)), 0.0, 0.5
+        )
+        clamped['dynamic_range_compression_ratio'] = clamp(
+            float(clamped.get('dynamic_range_compression_ratio', 1.0)), 1.0, 3.0
+        )
+        clamped['high_frequency_boost'] = clamp(
+            float(clamped.get('high_frequency_boost', 0.0)), -0.5, 2.0
+        )
+        clamped['low_frequency_reduction'] = clamp(
+            float(clamped.get('low_frequency_reduction', 0.0)), -4.0, 0.0
+        )
+        clamped['adaptive_gain'] = clamp(
+            float(clamped.get('adaptive_gain', 1.0)), 0.8, 1.2
+        )
+        clamped['noise_gate_threshold'] = clamp(
+            float(clamped.get('noise_gate_threshold', -45.0)), -55.0, -25.0
+        )
+
+        return clamped
     
     def _strategy_to_dict(self, strategy: Optional[AudioProcessingStrategy]) -> Dict:
         """Convert AudioProcessingStrategy to dictionary."""

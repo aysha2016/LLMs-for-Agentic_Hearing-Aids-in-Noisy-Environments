@@ -10,6 +10,7 @@ from datetime import datetime
 from scipy.io import wavfile
 
 from src.audio.speech_synthesizer import SpeechSynthesizer, SpeechScenarioGenerator, create_noisy_speech
+from src.audio.neural_denoiser import NeuralDenoiser
 from src.hearing_aid.controller import HearingAidController
 from src.hearing_aid.profiles import UserProfile
 
@@ -26,6 +27,15 @@ def print_section(text):
     print(f"\n{'─'*80}")
     print(f"🔹 {text}")
     print(f"{'─'*80}")
+
+
+def _unwrap_audio(audio_or_dict, preferred_key=None):
+    """Return audio array from dict-backed scenarios."""
+    if isinstance(audio_or_dict, dict):
+        if preferred_key and preferred_key in audio_or_dict:
+            return audio_or_dict[preferred_key]
+        return next(iter(audio_or_dict.values()))
+    return audio_or_dict
 
 
 def test_synthesized_speech():
@@ -50,6 +60,15 @@ def test_synthesized_speech():
     print("\n🔧 Initializing scenario generator...")
     scenario_gen = SpeechScenarioGenerator(sample_rate)
     print("   ✓ Scenario generator ready")
+
+    print("\n🔧 Initializing neural denoiser...")
+    denoiser_model_path = "models/neural_denoiser.pt"
+    denoiser = NeuralDenoiser(
+        sample_rate=sample_rate,
+        model_path=denoiser_model_path if os.path.exists(denoiser_model_path) else None,
+        device="cpu"
+    )
+    print("   ✓ Neural denoiser ready")
     
     print("\n🔧 Initializing hearing aid controller...")
     user_profile = UserProfile(
@@ -76,7 +95,7 @@ def test_synthesized_speech():
     # Scenario 1: Presentation
     print_section("Scenario 1: Presentation")
     print("   Synthesizing presentation audio...")
-    presentation_audio = scenario_gen.generate_presentation()
+    presentation_audio = _unwrap_audio(scenario_gen.generate_presentation(), preferred_key="presenter")
     print(f"   ✓ Generated {len(presentation_audio) / sample_rate:.1f}s of audio")
     scenarios['presentation'] = presentation_audio
     
@@ -98,7 +117,7 @@ def test_synthesized_speech():
     # Scenario 4: Reading
     print_section("Scenario 4: Reading")
     print("   Synthesizing reading audio...")
-    reading_audio = scenario_gen.generate_reading()
+    reading_audio = _unwrap_audio(scenario_gen.generate_reading(), preferred_key="narrator")
     print(f"   ✓ Generated {len(reading_audio) / sample_rate:.1f}s of reading")
     scenarios['reading'] = reading_audio
     
@@ -118,6 +137,13 @@ def test_synthesized_speech():
     
     for scenario_name, audio in scenarios.items():
         print_section(f"Processing: {scenario_name.upper()}")
+
+        print("   Applying neural denoiser...")
+        try:
+            audio = denoiser.denoise(audio, suppression_strength=0.8)
+            print("   ✓ Neural denoising applied")
+        except Exception as exc:
+            print(f"   ⚠️  Neural denoising skipped: {exc}")
         
         # Extract features
         print(f"   Extracting audio features...")

@@ -16,6 +16,9 @@ torch>=2.0.0
 torchaudio>=2.0.0
 transformers>=4.30.0  # For pre-trained audio models
 
+# Neural Text-to-Speech - Google TTS for natural high-quality speech synthesis
+gTTS>=2.3.0  # Google Text-to-Speech API
+
 # Testing
 pytest>=7.0.0
 pytest-cov>=3.0.0

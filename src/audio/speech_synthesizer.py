@@ -1,192 +1,252 @@
-"""Synthetic speech synthesis module for hearing aid testing."""
+"""Neural Text-to-Speech synthesis using Google Text-to-Speech for realistic speech generation."""
 
 import numpy as np
 from scipy.io import wavfile
 import logging
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
+import os
+import tempfile
 
 logger = logging.getLogger(__name__)
 
+try:
+    from gtts import gTTS
+    TTS_AVAILABLE = True
+except ImportError:
+    TTS_AVAILABLE = False
+    logger.warning("gTTS not installed. Install with: pip install gtts")
+
 
 class SpeechSynthesizer:
-    """Synthesize realistic speech-like audio with multiple voice profiles."""
+    """Synthesize realistic, natural-sounding speech using Google Text-to-Speech."""
     
-    def __init__(self, sample_rate: int = 16000, voice_profile: str = "neutral"):
+    # Language codes for different voices
+    VOICE_CONFIGS = {
+        "male": {"lang": "en", "tld": "com"},
+        "female": {"lang": "en", "tld": "com"},
+        "neutral": {"lang": "en", "tld": "com"},
+        "child": {"lang": "en", "tld": "com"},
+    }
+    
+    def __init__(self, sample_rate: int = 16000, voice_profile: str = "neutral", use_gpu: bool = False):
         """
-        Initialize speech synthesizer.
+        Initialize Google TTS speech synthesizer for natural-sounding speech.
         
         Args:
-            sample_rate: Audio sample rate in Hz
+            sample_rate: Audio sample rate in Hz (typically 16000)
             voice_profile: Voice type - "male", "female", "child", or "neutral"
+            use_gpu: Ignored (Google TTS is cloud-based)
         """
+        if not TTS_AVAILABLE:
+            raise ImportError("gTTS not installed. Install with: pip install gtts")
+        
         self.sample_rate = sample_rate
         self.voice_profile = voice_profile
-        self._set_voice_parameters(voice_profile)
-        logger.info(f"Speech synthesizer initialized at {sample_rate}Hz with {voice_profile} voice")
+        self.use_gpu = use_gpu
+        
+        # Store voice config
+        self.voice_config = self.VOICE_CONFIGS.get(voice_profile, self.VOICE_CONFIGS["neutral"])
+        
+        logger.info(f"Speech synthesizer initialized with {voice_profile} voice at {sample_rate}Hz (using Google TTS)")
+
     
-    def _set_voice_parameters(self, voice_profile: str):
-        """Set voice characteristics based on profile."""
-        profiles = {
-            "male": {
-                "f0_base": 100,      # Fundamental frequency base (Hz)
-                "f0_range": 40,      # Variation range
-                "f1_base": 700,      # First formant
-                "f2_base": 1220,     # Second formant
-                "f3_base": 2600,     # Third formant
-            },
-            "female": {
-                "f0_base": 200,      # Higher pitch for female
-                "f0_range": 60,
-                "f1_base": 650,
-                "f2_base": 1400,
-                "f3_base": 2800,
-            },
-            "child": {
-                "f0_base": 250,      # Even higher for child
-                "f0_range": 80,
-                "f1_base": 600,
-                "f2_base": 1500,
-                "f3_base": 3000,
-            },
-            "neutral": {
-                "f0_base": 150,
-                "f0_range": 50,
-                "f1_base": 700,
-                "f2_base": 1300,
-                "f3_base": 2700,
-            }
-        }
-        self.voice_params = profiles.get(voice_profile, profiles["neutral"])
-    
-    def synthesize_text(self, text: str, emotion: str = "neutral", output_file: str = None) -> np.ndarray:
+    def synthesize_text(self, text: str, emotion: str = "neutral", output_file: Optional[str] = None) -> np.ndarray:
         """
-        Synthesize text to speech-like audio with emotion variation.
+        Synthesize text to realistic speech audio using Google TTS.
         
         Args:
-            text: Text to synthesize (length determines duration)
+            text: Text to synthesize
             emotion: Emotion type - "neutral", "happy", "sad", "excited"
-            output_file: Optional file to save audio
+                    (applied through speech rate modulation)
+            output_file: Optional file path to save the audio
         
         Returns:
-            Audio array (numpy ndarray)
+            Audio array (numpy ndarray, float32)
         """
         try:
-            # Duration based on character count
-            duration = max(len(text) / 10, 0.5)
-            num_samples = int(duration * self.sample_rate)
-            t = np.linspace(0, duration, num_samples)
+            logger.info(f"Synthesizing: '{text[:50]}...' ({emotion} emotion)")
             
-            # Generate speech-like audio with emotion
-            audio = self._formant_synthesis(t, emotion)
+            # Create temporary file for TTS output
+            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+                tmp_path = tmp.name
             
-            # Normalize
-            audio_float = audio.astype(np.float32)
+            try:
+                # Modify text based on emotion
+                emotion_text = self._apply_emotion_to_text(text, emotion)
+                
+                # Generate speech using Google TTS
+                tts = gTTS(text=emotion_text, lang=self.voice_config["lang"], 
+                          tld=self.voice_config["tld"], slow=False)
+                tts.save(tmp_path)
+                
+                # Convert MP3 to WAV using scipy/librosa
+                audio_float = self._convert_mp3_to_wav(tmp_path)
+                
+                # Resample if necessary
+                if audio_float.shape[0] > 0 and self.sample_rate != 22050:
+                    audio_float = self._resample(audio_float, 22050, self.sample_rate)
+                
+                # Apply additional emotion modulation
+                if emotion != "neutral":
+                    audio_float = self._apply_emotion(audio_float, emotion)
+                
+                # Save if requested
+                if output_file:
+                    audio_int16 = np.int16(audio_float / np.max(np.abs(audio_float) + 1e-5) * 32767)
+                    wavfile.write(output_file, self.sample_rate, audio_int16)
+                    logger.info(f"Saved synthesized speech to: {output_file}")
+                
+                return audio_float
             
-            # Save if requested
-            if output_file:
-                audio_int16 = np.int16(audio_float / np.max(np.abs(audio_float)) * 32767)
-                wavfile.write(output_file, self.sample_rate, audio_int16)
-                logger.info(f"Saved {emotion} synthesized speech to: {output_file}")
-            
-            return audio_float
+            finally:
+                # Clean up temporary file
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
         
         except Exception as e:
             logger.error(f"Error synthesizing speech: {e}")
             raise
     
-    def _formant_synthesis(self, t: np.ndarray, emotion: str = "neutral") -> np.ndarray:
+    def _apply_emotion_to_text(self, text: str, emotion: str) -> str:
         """
-        Generate speech-like audio using formant synthesis with emotion.
+        Modify text based on emotion for more natural prosody.
         
         Args:
-            t: Time array
-            emotion: Emotion type affecting pitch contour and intensity
+            text: Original text
+            emotion: Emotion type
         
         Returns:
-            Synthesized audio
+            Modified text
         """
-        # Get voice parameters
-        f0_base = self.voice_params["f0_base"]
-        f0_range = self.voice_params["f0_range"]
-        
-        # Emotion-based pitch modulation
-        emotion_params = {
-            "neutral": {"pitch_var": 0.3, "intensity": 0.8, "vibrato": 0.02},
-            "happy": {"pitch_var": 0.6, "intensity": 0.9, "vibrato": 0.03},
-            "sad": {"pitch_var": 0.1, "intensity": 0.6, "vibrato": 0.01},
-            "excited": {"pitch_var": 0.8, "intensity": 1.0, "vibrato": 0.04},
-        }
-        emotion_cfg = emotion_params.get(emotion, emotion_params["neutral"])
-        
-        # Fundamental frequency with emotion-based variation
-        f0_var = emotion_cfg["pitch_var"]
-        f0 = f0_base + f0_range * (
-            f0_var * np.sin(2 * np.pi * 0.5 * t) +  # Slow variation
-            f0_var * 0.3 * np.sin(2 * np.pi * 1.5 * t)  # Faster variation
-        )
-        
-        # Formant frequencies with variation
-        f1 = self.voice_params["f1_base"] + 150 * np.sin(2 * np.pi * 0.3 * t)
-        f2 = self.voice_params["f2_base"] + 200 * np.cos(2 * np.pi * 0.4 * t)
-        f3 = self.voice_params["f3_base"] + 300 * np.sin(2 * np.pi * 0.2 * t)
-        
-        # Generate fundamental frequency component
-        phase0 = 2 * np.pi * np.cumsum(f0) / self.sample_rate
-        voiced = np.sin(phase0)
-        
-        # Add vibrato (natural pitch wobble)
-        vibrato_depth = emotion_cfg["vibrato"]
-        vibrato = vibrato_depth * np.sin(2 * np.pi * 5 * t)  # 5 Hz vibrato
-        voiced *= (1 + vibrato)
-        
-        # Generate formant components
-        phase1 = 2 * np.pi * np.cumsum(f1) / self.sample_rate
-        phase2 = 2 * np.pi * np.cumsum(f2) / self.sample_rate
-        phase3 = 2 * np.pi * np.cumsum(f3) / self.sample_rate
-        
-        formant1 = 0.3 * np.sin(phase1)
-        formant2 = 0.2 * np.sin(phase2)
-        formant3 = 0.1 * np.sin(phase3)
-        
-        # Combine components
-        audio = voiced * (formant1 + formant2 + formant3)
-        
-        # Add consonant-like characteristics (noise bursts)
-        noise = np.random.randn(len(t)) * 0.02
-        audio += noise
-        
-        # Amplitude envelope with emotion
-        envelope = np.ones_like(t)
-        attack_time = int(0.05 * self.sample_rate)
-        release_time = int(0.05 * self.sample_rate)
-        
-        # Attack phase
-        envelope[:attack_time] = np.linspace(0, 1, attack_time)
-        # Release phase
-        envelope[-release_time:] = np.linspace(1, 0, release_time)
-        
-        # Mid-section dynamics based on emotion
-        mid_start = attack_time
-        mid_end = len(t) - release_time
-        mid_length = mid_end - mid_start
-        
-        if emotion == "happy":
-            # Increasing intensity for happy
-            envelope[mid_start:mid_end] *= np.linspace(0.8, 1.0, mid_length)
+        if emotion == "excited":
+            # Add exclamation marks for excitement
+            return text.rstrip('.!?') + '!'
         elif emotion == "sad":
-            # Decreasing intensity for sad
-            envelope[mid_start:mid_end] *= np.linspace(1.0, 0.7, mid_length)
-        elif emotion == "excited":
-            # Pulsing intensity for excited
-            envelope[mid_start:mid_end] *= (0.8 + 0.2 * np.sin(2 * np.pi * 2 * t[mid_start:mid_end]))
+            # Keep text as is but will be processed differently
+            return text
+        elif emotion == "happy":
+            # Add friendly punctuation
+            if text.endswith('.'):
+                return text[:-1] + '!'
+            return text
+        return text
+    
+    def _convert_mp3_to_wav(self, mp3_path: str) -> np.ndarray:
+        """
+        Convert MP3 file to PCM audio array.
         
-        audio *= envelope
+        Args:
+            mp3_path: Path to MP3 file
         
-        # Apply intensity based on emotion
-        audio *= emotion_cfg["intensity"]
+        Returns:
+            Audio array
+        """
+        try:
+            # Try using scipy/librosa
+            import librosa
+            y, sr = librosa.load(mp3_path, sr=None)
+            return y.astype(np.float32)
+        except:
+            try:
+                # Fallback: use pydub if available
+                from pydub import AudioSegment
+                sound = AudioSegment.from_mp3(mp3_path)
+                samples = np.array(sound.get_array_of_samples(), dtype=np.float32)
+                if sound.channels == 2:
+                    samples = samples.reshape((-1, 2)).mean(axis=1)
+                samples = samples / (2 ** 15)  # Normalize
+                return samples
+            except:
+                logger.error("Could not convert MP3. Please install librosa or pydub.")
+                return np.array([], dtype=np.float32)
+    
+    def _apply_emotion(self, audio: np.ndarray, emotion: str) -> np.ndarray:
+        """
+        Apply emotional characteristics through pitch and amplitude modulation.
         
-        # Normalize to [-1, 1] range
-        return audio / np.max(np.abs(audio)) * 0.8
+        Args:
+            audio: Input audio array
+            emotion: Emotion type
+        
+        Returns:
+            Modified audio array
+        """
+        if emotion == "neutral":
+            return audio
+        
+        emotion_params = {
+            "happy": {
+                "pitch_shift": 0.8,      # Higher pitch
+                "speed_factor": 1.1,    # Slightly faster
+                "amplitude": 1.1,       # Slightly louder
+            },
+            "sad": {
+                "pitch_shift": 1.2,     # Lower pitch
+                "speed_factor": 0.95,   # Slightly slower
+                "amplitude": 0.85,      # Quieter
+            },
+            "excited": {
+                "pitch_shift": 0.7,     # Much higher pitch
+                "speed_factor": 1.15,   # Much faster
+                "amplitude": 1.2,       # Louder
+            },
+        }
+        
+        params = emotion_params.get(emotion, emotion_params["neutral"])
+        
+        # Apply pitch shift via simple resampling (pitch_shift > 1 = lower pitch)
+        if params["pitch_shift"] != 1.0:
+            audio = self._pitch_shift(audio, params["pitch_shift"])
+        
+        # Apply amplitude modulation
+        audio = audio * params["amplitude"]
+        
+        # Clip to avoid distortion
+        audio = np.clip(audio, -1.0, 1.0)
+        
+        return audio
+    
+    def _pitch_shift(self, audio: np.ndarray, factor: float) -> np.ndarray:
+        """
+        Simple pitch shift via resampling.
+        
+        Args:
+            audio: Input audio
+            factor: Pitch shift factor (>1 = lower pitch, <1 = higher pitch)
+        
+        Returns:
+            Pitch-shifted audio
+        """
+        # Resample to change pitch
+        new_length = int(len(audio) / factor)
+        indices = np.linspace(0, len(audio) - 1, new_length)
+        resampled = np.interp(indices, np.arange(len(audio)), audio)
+        
+        return resampled.astype(np.float32)
+    
+    def _resample(self, audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
+        """
+        Resample audio to target sample rate.
+        
+        Args:
+            audio: Input audio
+            orig_sr: Original sample rate
+            target_sr: Target sample rate
+        
+        Returns:
+            Resampled audio
+        """
+        if orig_sr == target_sr:
+            return audio
+        
+        ratio = target_sr / orig_sr
+        new_length = int(len(audio) * ratio)
+        
+        # Linear interpolation resampling
+        indices = np.linspace(0, len(audio) - 1, new_length)
+        resampled = np.interp(indices, np.arange(len(audio)), audio)
+        
+        return resampled.astype(np.float32)
     
     def synthesize_dialogue(self, dialogue: List[Tuple[str, str]]) -> Dict[str, np.ndarray]:
         """
@@ -199,10 +259,18 @@ class SpeechSynthesizer:
             Dictionary mapping speaker names to audio arrays
         """
         results = {}
-        for speaker, text in dialogue:
-            audio = self.synthesize_text(text)
-            results[speaker] = audio
-            logger.info(f"Synthesized speech for {speaker}: {len(text)} characters")
+        voice_types = ["female", "male", "neutral", "child"]
+        
+        for i, (speaker, text) in enumerate(dialogue):
+            voice_type = voice_types[i % len(voice_types)]
+            try:
+                synthesizer = SpeechSynthesizer(self.sample_rate, voice_profile=voice_type, use_gpu=self.use_gpu)
+                audio = synthesizer.synthesize_text(text)
+                results[speaker] = audio
+                logger.info(f"Synthesized speech for {speaker} ({voice_type}): {len(text)} characters")
+            except Exception as e:
+                logger.error(f"Error synthesizing dialogue for {speaker}: {e}")
+                results[speaker] = np.array([])
         
         return results
     
@@ -217,70 +285,73 @@ class SpeechSynthesizer:
         Returns:
             Audio array
         """
-        logger.info(f"Context: {context}")
+        logger.info(f"Synthesizing with context: {context}")
         return self.synthesize_text(text)
-    
-    def _resample(self, audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
-        """Resample audio to target sample rate."""
-        if orig_sr == target_sr:
-            return audio
-        
-        ratio = target_sr / orig_sr
-        new_length = int(len(audio) * ratio)
-        
-        # Simple linear interpolation resampling
-        indices = np.linspace(0, len(audio) - 1, new_length)
-        resampled = np.interp(indices, np.arange(len(audio)), audio)
-        
-        return resampled.astype(np.int16)
 
 
 class SpeechScenarioGenerator:
-    """Generate various speech scenarios with realistic voice variation."""
+    """Generate various speech scenarios with realistic neural TTS."""
     
-    def __init__(self, sample_rate: int = 16000):
-        """Initialize scenario generator."""
+    def __init__(self, sample_rate: int = 16000, use_gpu: bool = False):
+        """
+        Initialize scenario generator.
+        
+        Args:
+            sample_rate: Audio sample rate
+            use_gpu: Whether to use GPU
+        """
         self.sample_rate = sample_rate
-        logger.info("Scenario generator initialized with multiple voice profiles")
+        self.use_gpu = use_gpu
+        logger.info("Scenario generator initialized with Coqui TTS")
     
     def generate_conference_call(self) -> Dict[str, np.ndarray]:
         """Generate simulated conference call with different speakers."""
         dialogue = [
-            ("Alice", "Thanks everyone for joining the call. Let's discuss the quarterly results.", "female", "neutral"),
-            ("Bob", "Sure, I've prepared some analysis on our market performance.", "male", "neutral"),
-            ("Carol", "And I have updates on the customer feedback and satisfaction metrics.", "female", "happy"),
+            ("Alice", "Thanks everyone for joining the call. Let's discuss the quarterly results.", "female"),
+            ("Bob", "Sure, I've prepared some analysis on our market performance.", "male"),
+            ("Carol", "And I have updates on the customer feedback and satisfaction metrics.", "female"),
         ]
         
-        logger.info("Generating conference call scenario with multiple speakers...")
+        logger.info("Generating conference call scenario...")
         results = {}
-        for speaker, text, voice_type, emotion in dialogue:
-            synthesizer = SpeechSynthesizer(self.sample_rate, voice_profile=voice_type)
-            audio = synthesizer.synthesize_text(text, emotion=emotion)
-            results[speaker] = audio
-            logger.info(f"  • {speaker} ({voice_type}, {emotion}): Generated {len(audio)/self.sample_rate:.1f}s")
+        
+        for speaker, text, voice_type in dialogue:
+            try:
+                synthesizer = SpeechSynthesizer(self.sample_rate, voice_profile=voice_type, use_gpu=self.use_gpu)
+                audio = synthesizer.synthesize_text(text)
+                results[speaker] = audio
+                logger.info(f"  ✓ {speaker} ({voice_type}): {len(audio)/self.sample_rate:.1f}s")
+            except Exception as e:
+                logger.error(f"Error generating speech for {speaker}: {e}")
+                results[speaker] = np.array([])
         
         return results
     
     def generate_casual_conversation(self) -> Dict[str, np.ndarray]:
         """Generate casual conversation with different voices."""
         dialogue = [
-            ("Alice", "Hey, how was your weekend?", "female", "happy"),
-            ("Bob", "It was great! I went hiking and visited a new coffee shop.", "male", "excited"),
-            ("Alice", "That sounds fun. Did you take any photos?", "female", "neutral"),
+            ("Alice", "Hey, how was your weekend?", "female"),
+            ("Bob", "It was great! I went hiking and visited a new coffee shop.", "male"),
+            ("Alice", "That sounds fun. Did you take any photos?", "female"),
         ]
         
-        logger.info("Generating casual conversation with varied voices...")
+        logger.info("Generating casual conversation...")
         results = {}
-        for speaker, text, voice_type, emotion in dialogue:
-            synthesizer = SpeechSynthesizer(self.sample_rate, voice_profile=voice_type)
-            audio = synthesizer.synthesize_text(text, emotion=emotion)
-            results[speaker] = audio
-            logger.info(f"  • {speaker} ({voice_type}, {emotion}): Generated {len(audio)/self.sample_rate:.1f}s")
+        
+        for speaker, text, voice_type in dialogue:
+            try:
+                synthesizer = SpeechSynthesizer(self.sample_rate, voice_profile=voice_type, use_gpu=self.use_gpu)
+                audio = synthesizer.synthesize_text(text)
+                results[speaker] = audio
+                logger.info(f"  ✓ {speaker} ({voice_type}): {len(audio)/self.sample_rate:.1f}s")
+            except Exception as e:
+                logger.error(f"Error generating speech for {speaker}: {e}")
+                results[speaker] = np.array([])
         
         return results
     
     def generate_presentation(self) -> Dict[str, np.ndarray]:
-        """Generate formal presentation with professional male voice."""
+        """Generate formal presentation with professional voice."""
         text = (
             "Good morning everyone. Today I'm going to discuss the latest advancements in hearing aid technology. "
             "Modern hearing aids are becoming increasingly sophisticated with AI-powered features. "
@@ -288,33 +359,41 @@ class SpeechScenarioGenerator:
             "This presentation will cover three main topics: signal processing, machine learning integration, and user experience."
         )
         
-        logger.info("Generating formal presentation (male, neutral)...")
-        synthesizer = SpeechSynthesizer(self.sample_rate, voice_profile="male")
-        audio = synthesizer.synthesize_text(text, emotion="neutral")
-        logger.info(f"  Generated {len(audio)/self.sample_rate:.1f}s of presentation")
-        
-        return {"presenter": audio}
+        logger.info("Generating formal presentation...")
+        try:
+            synthesizer = SpeechSynthesizer(self.sample_rate, voice_profile="male", use_gpu=self.use_gpu)
+            audio = synthesizer.synthesize_text(text)
+            logger.info(f"  ✓ Generated {len(audio)/self.sample_rate:.1f}s of presentation")
+            return {"presenter": audio}
+        except Exception as e:
+            logger.error(f"Error generating presentation: {e}")
+            return {"presenter": np.array([])}
     
     def generate_phone_call(self) -> Dict[str, np.ndarray]:
         """Generate simulated phone call with different voices."""
         dialogue = [
-            ("Caller", "Hi, I'm calling to confirm our meeting tomorrow at two PM.", "male", "neutral"),
-            ("Receiver", "Yes, that works for me. Should I bring the presentation files?", "female", "neutral"),
-            ("Caller", "That would be helpful. See you then.", "male", "neutral"),
+            ("Caller", "Hi, I'm calling to confirm our meeting tomorrow at two PM.", "male"),
+            ("Receiver", "Yes, that works for me. Should I bring the presentation files?", "female"),
+            ("Caller", "That would be helpful. See you then.", "male"),
         ]
         
-        logger.info("Generating phone call with different speakers...")
+        logger.info("Generating phone call...")
         results = {}
-        for speaker, text, voice_type, emotion in dialogue:
-            synthesizer = SpeechSynthesizer(self.sample_rate, voice_profile=voice_type)
-            audio = synthesizer.synthesize_text(text, emotion=emotion)
-            results[speaker] = audio
-            logger.info(f"  • {speaker} ({voice_type}): Generated {len(audio)/self.sample_rate:.1f}s")
+        
+        for speaker, text, voice_type in dialogue:
+            try:
+                synthesizer = SpeechSynthesizer(self.sample_rate, voice_profile=voice_type, use_gpu=self.use_gpu)
+                audio = synthesizer.synthesize_text(text)
+                results[speaker] = audio
+                logger.info(f"  ✓ {speaker} ({voice_type}): {len(audio)/self.sample_rate:.1f}s")
+            except Exception as e:
+                logger.error(f"Error generating speech for {speaker}: {e}")
+                results[speaker] = np.array([])
         
         return results
     
     def generate_reading(self) -> Dict[str, np.ndarray]:
-        """Generate voice reading of text in female voice."""
+        """Generate voice reading of text."""
         text = (
             "Hearing loss is one of the most common sensory disorders affecting millions of people worldwide. "
             "It can impact communication, social interaction, and overall quality of life. "
@@ -322,17 +401,20 @@ class SpeechScenarioGenerator:
             "The integration of artificial intelligence allows these devices to adapt intelligently to user preferences and environmental conditions."
         )
         
-        logger.info("Generating reading (female, neutral)...")
-        synthesizer = SpeechSynthesizer(self.sample_rate, voice_profile="female")
-        audio = synthesizer.synthesize_text(text, emotion="neutral")
-        logger.info(f"  Generated {len(audio)/self.sample_rate:.1f}s of reading")
-        
-        return {"narrator": audio}
+        logger.info("Generating reading...")
+        try:
+            synthesizer = SpeechSynthesizer(self.sample_rate, voice_profile="female", use_gpu=self.use_gpu)
+            audio = synthesizer.synthesize_text(text)
+            logger.info(f"  ✓ Generated {len(audio)/self.sample_rate:.1f}s of reading")
+            return {"narrator": audio}
+        except Exception as e:
+            logger.error(f"Error generating reading: {e}")
+            return {"narrator": np.array([])}
     
     def generate_custom(self, text: str, scenario_name: str = "custom", 
                        voice_type: str = "neutral", emotion: str = "neutral") -> np.ndarray:
         """
-        Generate custom speech scenario with voice and emotion control.
+        Generate custom speech scenario.
         
         Args:
             text: Text to synthesize
@@ -343,45 +425,57 @@ class SpeechScenarioGenerator:
         Returns:
             Audio array
         """
-        logger.info(f"Generating custom scenario: {scenario_name} ({voice_type}, {emotion})")
-        synthesizer = SpeechSynthesizer(self.sample_rate, voice_profile=voice_type)
-        audio = synthesizer.synthesize_text(text, emotion=emotion)
-        logger.info(f"  Generated {len(audio)/self.sample_rate:.1f}s")
-        
-        return audio
+        logger.info(f"Generating custom scenario: {scenario_name}")
+        try:
+            synthesizer = SpeechSynthesizer(self.sample_rate, voice_profile=voice_type, use_gpu=self.use_gpu)
+            audio = synthesizer.synthesize_text(text, emotion=emotion)
+            logger.info(f"  ✓ Generated {len(audio)/self.sample_rate:.1f}s ({voice_type}, {emotion})")
+            return audio
+        except Exception as e:
+            logger.error(f"Error generating custom scenario: {e}")
+            return np.array([])
     
     def generate_emotional_variations(self, text: str) -> Dict[str, np.ndarray]:
         """Generate same text with different emotions."""
         emotions = ["neutral", "happy", "sad", "excited"]
-        synthesizer = SpeechSynthesizer(self.sample_rate, voice_profile="female")
-        
         results = {}
-        logger.info(f"Generating emotional variations of text...")
-        for emotion in emotions:
-            audio = synthesizer.synthesize_text(text, emotion=emotion)
-            results[emotion] = audio
-            logger.info(f"  • {emotion}: Generated {len(audio)/self.sample_rate:.1f}s")
+        
+        logger.info("Generating emotional variations...")
+        try:
+            synthesizer = SpeechSynthesizer(self.sample_rate, voice_profile="female", use_gpu=self.use_gpu)
+            for emotion in emotions:
+                audio = synthesizer.synthesize_text(text, emotion=emotion)
+                results[emotion] = audio
+                logger.info(f"  ✓ {emotion}: {len(audio)/self.sample_rate:.1f}s")
+        except Exception as e:
+            logger.error(f"Error generating emotional variations: {e}")
+            for emotion in emotions:
+                results[emotion] = np.array([])
         
         return results
     
     def generate_voice_variations(self, text: str) -> Dict[str, np.ndarray]:
         """Generate same text in different voice types."""
         voices = ["male", "female", "child", "neutral"]
-        
         results = {}
-        logger.info(f"Generating voice variations of text...")
+        
+        logger.info("Generating voice variations...")
         for voice_type in voices:
-            synthesizer = SpeechSynthesizer(self.sample_rate, voice_profile=voice_type)
-            audio = synthesizer.synthesize_text(text, emotion="neutral")
-            results[voice_type] = audio
-            logger.info(f"  • {voice_type}: Generated {len(audio)/self.sample_rate:.1f}s")
+            try:
+                synthesizer = SpeechSynthesizer(self.sample_rate, voice_profile=voice_type, use_gpu=self.use_gpu)
+                audio = synthesizer.synthesize_text(text)
+                results[voice_type] = audio
+                logger.info(f"  ✓ {voice_type}: {len(audio)/self.sample_rate:.1f}s")
+            except Exception as e:
+                logger.error(f"Error generating speech for {voice_type}: {e}")
+                results[voice_type] = np.array([])
         
         return results
 
 
 def create_noisy_speech(speech: np.ndarray, noise_type: str = "gaussian", snr_db: float = 10.0) -> np.ndarray:
     """
-    Add noise to speech audio.
+    Add noise to speech audio to simulate real-world conditions.
     
     Args:
         speech: Speech audio array
@@ -395,12 +489,12 @@ def create_noisy_speech(speech: np.ndarray, noise_type: str = "gaussian", snr_db
         noise = np.random.randn(len(speech)) * 0.1
     
     elif noise_type == "pink":
-        # Simple pink noise approximation
+        # Pink noise approximation
         white = np.random.randn(len(speech))
         noise = np.cumsum(white) / len(speech) * 0.05
     
     elif noise_type == "office":
-        # Simulate office background noise
+        # Simulate office background noise (HVAC, people, etc.)
         t = np.linspace(0, len(speech) / 16000, len(speech))
         noise = (
             0.05 * np.sin(2 * np.pi * 60 * t) +  # HVAC hum
