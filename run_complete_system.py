@@ -98,7 +98,37 @@ def generate_comprehensive_dataset():
     return dataset
 
 
-def run_complete_oral_loop(audio, scenario_name, controller, decision_engine):
+def load_enhanced_speech_dataset(output_dir: str = "output_enhanced_speech"):
+    """Load enhanced speech WAV files as a dataset for the ORAL loop."""
+    if not os.path.isdir(output_dir):
+        return {}, None
+
+    dataset = {}
+    sample_rate = None
+
+    for filename in os.listdir(output_dir):
+        if not filename.endswith(".wav"):
+            continue
+        if "_enhanced_" not in filename:
+            continue
+        path = os.path.join(output_dir, filename)
+        sr, audio = wavfile.read(path)
+        if audio.ndim > 1:
+            audio = audio.mean(axis=1)
+        if np.issubdtype(audio.dtype, np.integer):
+            max_val = np.iinfo(audio.dtype).max
+            audio = audio.astype(np.float32) / max_val
+        else:
+            audio = audio.astype(np.float32)
+
+        if sample_rate is None:
+            sample_rate = sr
+        dataset[os.path.splitext(filename)[0]] = audio
+
+    return dataset, sample_rate
+
+
+def run_complete_oral_loop(audio, scenario_name, controller, decision_engine, frame_ms: int = 20):
     """Run complete ORAL (Observe-Reason-Act-Learn) loop."""
     
     print_section(f"SCENARIO: {scenario_name.upper()}")
@@ -110,7 +140,9 @@ def run_complete_oral_loop(audio, scenario_name, controller, decision_engine):
     print("   Extracting audio features (no raw waveform access)...")
     
     start_time = time.time()
-    features = controller.feature_extractor.extract_features(audio)
+    frame_size = int(controller.sample_rate * frame_ms / 1000)
+    frame_audio = audio[:frame_size] if len(audio) > frame_size else audio
+    features = controller.feature_extractor.extract_features(frame_audio)
     observe_time = time.time() - start_time
     
     print(f"   ✓ Observation complete ({observe_time:.3f}s)")
@@ -168,15 +200,41 @@ def run_complete_oral_loop(audio, scenario_name, controller, decision_engine):
             print(f"      • {violation}")
     
     print("\n   Applying audio processing strategy...")
-    start_time = time.time()
-    result = controller.process_audio(audio, use_llm_decision=True)
-    act_time = time.time() - start_time
-    
-    print(f"   ✓ Processing complete ({act_time:.3f}s)")
-    
-    processed_audio = None
-    if result['status'] == 'success':
-        processed_audio = result['processed_audio']
+    if decision:
+        strategy_payload = {
+            "noise_suppression_strength": decision.primary_action.get("noise_suppression_strength", 0.5),
+            "speech_enhancement_level": decision.primary_action.get("speech_enhancement_strength", 0.3),
+            "dynamic_range_compression_ratio": decision.primary_action.get("compression_ratio", 1.5),
+            "frequency_emphasis": None,
+            "high_frequency_boost": decision.primary_action.get("high_freq_boost_db", 0.0),
+            "low_frequency_reduction": decision.primary_action.get("low_freq_reduction_db", 0.0),
+            "adaptive_gain": 1.0,
+            "noise_gate_threshold": -40.0,
+            "rationale": decision.rationale,
+        }
+        controller.current_strategy = controller._dict_to_strategy(strategy_payload)
+
+    processed_chunks = []
+    act_times = []
+    for start in range(0, len(audio), frame_size):
+        chunk = audio[start:start + frame_size]
+        chunk_length = len(chunk)
+        if chunk_length < frame_size:
+            chunk = np.pad(chunk, (0, frame_size - chunk_length), mode='constant')
+        chunk_start = time.time()
+        processed_chunk = controller.audio_processor.apply_strategy(chunk, controller.current_strategy)
+        act_times.append(time.time() - chunk_start)
+        if chunk_length < frame_size:
+            processed_chunk = processed_chunk[:chunk_length]
+        processed_chunks.append(processed_chunk)
+
+    act_time_total = sum(act_times)
+    act_time_avg = np.mean(act_times) if act_times else 0.0
+
+    print(f"   ✓ Processing complete (avg frame {act_time_avg:.3f}s)")
+
+    processed_audio = np.concatenate(processed_chunks) if processed_chunks else None
+    if processed_audio is not None:
         print(f"   ✓ Output audio shape: {processed_audio.shape}")
         print(f"   ✓ Processing successful!")
     
@@ -221,12 +279,12 @@ def run_complete_oral_loop(audio, scenario_name, controller, decision_engine):
     # ========================================================================
     # Summary
     # ========================================================================
-    total_time = observe_time + reason_time + act_time
+    total_time = observe_time + reason_time + act_time_avg
     
     print(f"\n⏱️  TIMING SUMMARY:")
     print(f"   • Observe: {observe_time*1000:.1f}ms")
     print(f"   • Reason:  {reason_time*1000:.1f}ms")
-    print(f"   • Act:     {act_time*1000:.1f}ms")
+    print(f"   • Act:     {act_time_avg*1000:.1f}ms (avg frame)")
     print(f"   • Total:   {total_time*1000:.1f}ms")
     
     return {
@@ -239,7 +297,8 @@ def run_complete_oral_loop(audio, scenario_name, controller, decision_engine):
         'timing': {
             'observe': observe_time,
             'reason': reason_time,
-            'act': act_time,
+            'act': act_time_avg,
+            'act_total': act_time_total,
             'total': total_time
         }
     }
@@ -288,7 +347,14 @@ def main():
     # GENERATE DATASET
     # ========================================================================
     print_header("DATASET GENERATION", "═")
-    dataset = generate_comprehensive_dataset()
+    dataset, dataset_sample_rate = load_enhanced_speech_dataset()
+    if dataset:
+        print_section("USING ENHANCED SPEECH OUTPUTS")
+        print(f"  ✅ Loaded {len(dataset)} enhanced audio files")
+        if dataset_sample_rate:
+            print(f"  ✅ Sample rate: {dataset_sample_rate} Hz")
+    else:
+        dataset = generate_comprehensive_dataset()
     
     # ========================================================================
     # RUN COMPLETE ORAL LOOP FOR EACH SCENARIO

@@ -1,0 +1,10 @@
+# Evaluation Matrix
+
+| Scenario | Duration (s) | SNR Noisy (dB) | SNR Enhanced (dB) | SNR Improvement (dB) | STOI Noisy | STOI Enhanced | SI-SDR Enhanced (dB) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| voice_female | 4.28 | 12.24 | 4.85 | -7.39 | 0.898 | 0.912 | 11.81 |
+| emotion_neutral | 4.00 | 10.40 | 12.07 | 1.68 | 1.000 | 0.996 | 14.47 |
+| emotion_sad | 3.33 | 9.39 | 13.48 | 4.09 | 0.999 | 0.994 | 16.47 |
+| conference_Alice | 6.03 | 12.27 | 6.09 | -6.18 | 0.922 | 0.929 | 12.80 |
+| casual_Bob | 5.17 | 14.08 | 5.42 | -8.65 | 0.839 | 0.850 | 11.16 |
+| voice_male | 4.28 | 12.24 | 4.86 | -7.39 | 0.897 | 0.910 | 11.98 |

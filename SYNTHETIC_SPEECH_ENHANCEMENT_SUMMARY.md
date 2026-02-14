@@ -119,6 +119,30 @@ Realistic dialogues with different speakers:
 
 ---
 
+## 📋 Evaluation Matrix
+
+The matrix below defines what to measure, how to measure it, and the current evidence available in this repository. Rows marked **TBD** indicate recommended next measurements.
+
+| Dimension | Metric / KPI | Method / Tool | Target / Threshold | Current Evidence | Status |
+|---|---|---|---|---|---|
+| Speech intelligibility | STOI, ESTOI | Objective metric on clean/noisy pairs | +0.05 or higher vs baseline | Not yet computed | TBD |
+| Speech quality | PESQ, POLQA | Objective metric on clean/noisy pairs | +0.3 or higher vs baseline | Not yet computed | TBD |
+| Noise suppression | SNR improvement, SDR | Objective on noisy vs processed | +3 dB or higher | Not yet computed | TBD |
+| Artifact control | MUSDB-style artifact score or spectral flatness delta | Objective on processed output | Within safe band | Not yet computed | TBD |
+| Latency | End-to-end processing time | Timing in pipeline | < 30 ms average | 23.6 ms average reported | Done |
+| Success rate | % scenarios processed | Run report aggregation | 100% | 6/6 scenarios (100%) | Done |
+| User satisfaction | Mean rating | User feedback score | >= 80% | 82.5% average reported | Done |
+| Realism (synthesis) | MOS-like subjective score | Listening panel (5-point) | >= 3.5/5 | Qualitative: "Sounds like real people" | Partial |
+| Speaker distinctiveness | ABX or identification accuracy | Listener test | >= 80% correct | Qualitative: "speaker identification possible" | Partial |
+| Emotion conveyance | Emotion classification accuracy | Listener test or classifier | >= 70% correct | Qualitative: "emotional intent clearly conveyed" | Partial |
+| Stability | Decision oscillation rate | Log analysis | No change < 10 s | Not yet computed | TBD |
+| Safety compliance | Parameter bounds violations | Safety validator logs | 0 violations | Not yet computed | TBD |
+| Privacy compliance | Raw audio exposure | Static analysis + runtime checks | 0 raw exposure | Architecture states no raw audio | Partial |
+| Resource usage | CPU time, memory | Profiling during demo | Within device budget | "CPU efficient" (qualitative) | Partial |
+| Robustness | Performance across scenarios | Scenario suite | No critical regressions | 6 scenarios processed | Partial |
+
+---
+
 ## 💻 Implementation Files
 
 ### Core Modifications

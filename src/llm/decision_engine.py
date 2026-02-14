@@ -233,13 +233,27 @@ class DecisionEngine:
         # Assess confidence
         confidence = self._assess_confidence(observation, strategy_dict)
         
+        rationale = reasoning_output.get('rationale', 'Strategy selected based on context')
+        duration_seconds = max(
+            self.MIN_ACTION_DURATION_SECONDS,
+            reasoning_output.get('duration_seconds', 30)
+        )
+        primary_action = dict(strategy_dict)
+        primary_action.update(
+            {
+                'rationale': rationale,
+                'confidence': confidence,
+                'duration_seconds': duration_seconds,
+                'is_reversible': True,
+            }
+        )
+
         # Generate decision object
         decision = Decision(
-            primary_action=strategy_dict,
+            primary_action=primary_action,
             confidence=confidence,
-            rationale=reasoning_output.get('rationale', 'Strategy selected based on context'),
-            duration_seconds=max(self.MIN_ACTION_DURATION_SECONDS, 
-                               reasoning_output.get('duration_seconds', 30)),
+            rationale=rationale,
+            duration_seconds=duration_seconds,
             secondary_adjustments=reasoning_output.get('secondary_adjustments', []),
             is_reversible=True,
             timestamp=datetime.now().isoformat()
@@ -500,15 +514,23 @@ class DecisionEngine:
         # This is a mock implementation
         
         mock_decision = {
+            "strategy_name": "moderate_noise_suppression_with_speech_boost",
             "noise_suppression_strength": 0.6,
-            "speech_enhancement_level": 0.5,
+            "speech_enhancement_strength": 0.4,
+            "compression_ratio": 3.0,
+            "high_freq_boost_db": 2.0,
+            "low_freq_reduction_db": -3.0,
+            "frequency_profile": "speech_optimized",
+            "rationale": "Moderate processing for typical office environment with some background noise",
+            "confidence": 0.85,
+            "duration_seconds": 30,
+            "is_reversible": True,
+            "speech_enhancement_level": 0.4,
             "dynamic_range_compression_ratio": 3.0,
             "high_frequency_boost": 2.0,
             "low_frequency_reduction": -3.0,
             "adaptive_gain": 1.0,
-            "noise_gate_threshold": -40.0,
-            "rationale": "Moderate processing for typical office environment with some background noise",
-            "confidence": 0.85
+            "noise_gate_threshold": -40.0
         }
         
         return mock_decision

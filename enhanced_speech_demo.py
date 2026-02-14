@@ -28,6 +28,19 @@ def print_section(text):
     print(f"{'─'*80}")
 
 
+def save_wav(audio: np.ndarray, sample_rate: int, output_path: str) -> None:
+    """Save audio to WAV with safe normalization."""
+    peak = np.max(np.abs(audio)) if audio.size else 0.0
+    scale = 32767 / (peak + 1e-9)
+    audio_int16 = np.int16(audio * scale)
+    wavfile.write(output_path, sample_rate, audio_int16)
+
+
+def has_audio(audio: np.ndarray) -> bool:
+    """Return True when audio is non-empty."""
+    return isinstance(audio, np.ndarray) and audio.size > 0
+
+
 def test_enhanced_synthetic_speech():
     """Test hearing aid system with enhanced realistic synthetic speech."""
     
@@ -79,20 +92,29 @@ def test_enhanced_synthetic_speech():
     
     voice_files = {}
     for voice_type, audio in voice_results.items():
+        if not has_audio(audio):
+            print(f"   ⚠️  {voice_type.upper()}: Empty audio, skipped")
+            continue
         # Save original
         orig_file = f"{output_dir}/voice_original_{voice_type}.wav"
-        audio_int16 = np.int16(audio / np.max(np.abs(audio)) * 32767)
-        wavfile.write(orig_file, sample_rate, audio_int16)
+        save_wav(audio, sample_rate, orig_file)
         voice_files[voice_type] = orig_file
-        
-        # Process through hearing aid
-        result = controller.process_audio(audio)
-        proc_file = f"{output_dir}/voice_processed_{voice_type}.wav"
+
+        # Add noise
+        noisy_audio = create_noisy_speech(audio, noise_type="office", snr_db=12)
+        noisy_file = f"{output_dir}/voice_noisy_{voice_type}.wav"
+        save_wav(noisy_audio, sample_rate, noisy_file)
+
+        # Process noisy audio through hearing aid with LLM decision
+        result = controller.process_audio(noisy_audio, use_llm_decision=True, force_decision=True)
+        proc_file = f"{output_dir}/voice_enhanced_{voice_type}.wav"
         if result['status'] == 'success':
             proc_audio = result['processed_audio']
-            proc_int16 = np.int16(proc_audio / np.max(np.abs(proc_audio)) * 32767)
-            wavfile.write(proc_file, sample_rate, proc_int16)
-            print(f"   ✓ {voice_type.upper()}: Original + Processed saved")
+            save_wav(proc_audio, sample_rate, proc_file)
+            explanation = result['strategy'].explanation if result.get('strategy') else ""
+            print(f"   ✓ {voice_type.upper()}: Original + Noisy + Enhanced saved")
+            if explanation:
+                print(f"     • Strategy: {explanation[:70]}...")
     
     # ========================================================================
     # GENERATE EMOTION VARIATIONS
@@ -105,20 +127,29 @@ def test_enhanced_synthetic_speech():
     
     emotion_files = {}
     for emotion, audio in emotion_results.items():
+        if not has_audio(audio):
+            print(f"   ⚠️  {emotion.upper()}: Empty audio, skipped")
+            continue
         # Save original
         orig_file = f"{output_dir}/emotion_original_{emotion}.wav"
-        audio_int16 = np.int16(audio / np.max(np.abs(audio)) * 32767)
-        wavfile.write(orig_file, sample_rate, audio_int16)
+        save_wav(audio, sample_rate, orig_file)
         emotion_files[emotion] = orig_file
-        
-        # Process through hearing aid
-        result = controller.process_audio(audio)
-        proc_file = f"{output_dir}/emotion_processed_{emotion}.wav"
+
+        # Add noise
+        noisy_audio = create_noisy_speech(audio, noise_type="pink", snr_db=10)
+        noisy_file = f"{output_dir}/emotion_noisy_{emotion}.wav"
+        save_wav(noisy_audio, sample_rate, noisy_file)
+
+        # Process noisy audio through hearing aid with LLM decision
+        result = controller.process_audio(noisy_audio, use_llm_decision=True, force_decision=True)
+        proc_file = f"{output_dir}/emotion_enhanced_{emotion}.wav"
         if result['status'] == 'success':
             proc_audio = result['processed_audio']
-            proc_int16 = np.int16(proc_audio / np.max(np.abs(proc_audio)) * 32767)
-            wavfile.write(proc_file, sample_rate, proc_int16)
-            print(f"   ✓ {emotion.upper()}: Emotion variation saved")
+            save_wav(proc_audio, sample_rate, proc_file)
+            explanation = result['strategy'].explanation if result.get('strategy') else ""
+            print(f"   ✓ {emotion.upper()}: Original + Noisy + Enhanced saved")
+            if explanation:
+                print(f"     • Strategy: {explanation[:70]}...")
     
     # ========================================================================
     # MULTI-SPEAKER SCENARIOS
@@ -128,32 +159,48 @@ def test_enhanced_synthetic_speech():
     print_section("Scenario 1: Conference Call")
     conference = scenario_gen.generate_conference_call()
     for speaker, audio in conference.items():
+        if not has_audio(audio):
+            print(f"   ⚠️  {speaker}: Empty audio, skipped")
+            continue
         orig_file = f"{output_dir}/conference_original_{speaker}.wav"
-        audio_int16 = np.int16(audio / np.max(np.abs(audio)) * 32767)
-        wavfile.write(orig_file, sample_rate, audio_int16)
-        
-        result = controller.process_audio(audio)
+        save_wav(audio, sample_rate, orig_file)
+
+        noisy_audio = create_noisy_speech(audio, noise_type="office", snr_db=12)
+        noisy_file = f"{output_dir}/conference_noisy_{speaker}.wav"
+        save_wav(noisy_audio, sample_rate, noisy_file)
+
+        result = controller.process_audio(noisy_audio, use_llm_decision=True, force_decision=True)
         if result['status'] == 'success':
-            proc_file = f"{output_dir}/conference_processed_{speaker}.wav"
+            proc_file = f"{output_dir}/conference_enhanced_{speaker}.wav"
             proc_audio = result['processed_audio']
-            proc_int16 = np.int16(proc_audio / np.max(np.abs(proc_audio)) * 32767)
-            wavfile.write(proc_file, sample_rate, proc_int16)
-            print(f"   ✓ {speaker}: Generated with realistic voice")
+            save_wav(proc_audio, sample_rate, proc_file)
+            explanation = result['strategy'].explanation if result.get('strategy') else ""
+            print(f"   ✓ {speaker}: Original + Noisy + Enhanced saved")
+            if explanation:
+                print(f"     • Strategy: {explanation[:70]}...")
     
     print_section("Scenario 2: Casual Conversation")
     casual = scenario_gen.generate_casual_conversation()
     for speaker, audio in casual.items():
+        if not has_audio(audio):
+            print(f"   ⚠️  {speaker}: Empty audio, skipped")
+            continue
         orig_file = f"{output_dir}/casual_original_{speaker}.wav"
-        audio_int16 = np.int16(audio / np.max(np.abs(audio)) * 32767)
-        wavfile.write(orig_file, sample_rate, audio_int16)
-        
-        result = controller.process_audio(audio)
+        save_wav(audio, sample_rate, orig_file)
+
+        noisy_audio = create_noisy_speech(audio, noise_type="gaussian", snr_db=14)
+        noisy_file = f"{output_dir}/casual_noisy_{speaker}.wav"
+        save_wav(noisy_audio, sample_rate, noisy_file)
+
+        result = controller.process_audio(noisy_audio, use_llm_decision=True, force_decision=True)
         if result['status'] == 'success':
-            proc_file = f"{output_dir}/casual_processed_{speaker}.wav"
+            proc_file = f"{output_dir}/casual_enhanced_{speaker}.wav"
             proc_audio = result['processed_audio']
-            proc_int16 = np.int16(proc_audio / np.max(np.abs(proc_audio)) * 32767)
-            wavfile.write(proc_file, sample_rate, proc_int16)
-            print(f"   ✓ {speaker}: Casual speech generated")
+            save_wav(proc_audio, sample_rate, proc_file)
+            explanation = result['strategy'].explanation if result.get('strategy') else ""
+            print(f"   ✓ {speaker}: Original + Noisy + Enhanced saved")
+            if explanation:
+                print(f"     • Strategy: {explanation[:70]}...")
     
     # ========================================================================
     # SUMMARY STATISTICS
@@ -165,19 +212,19 @@ def test_enhanced_synthetic_speech():
     print(f"   • Female voice")
     print(f"   • Child voice")
     print(f"   • Neutral voice")
-    print(f"   ✓ Total: 4 voice types × 2 (original + processed) = 8 files")
+    print(f"   ✓ Total: 4 voice types × 3 (original + noisy + enhanced) = 12 files")
     
     print("\n📊 Emotion Variations Generated:")
     print(f"   • Neutral emotion")
     print(f"   • Happy emotion (higher pitch, vibrant)")
     print(f"   • Sad emotion (lower pitch, softer)")
     print(f"   • Excited emotion (very high pitch, pulsing intensity)")
-    print(f"   ✓ Total: 4 emotions × 2 = 8 files")
+    print(f"   ✓ Total: 4 emotions × 3 = 12 files")
     
     print("\n📊 Multi-Speaker Scenarios:")
     print(f"   • Conference call (3 speakers: Alice, Bob, Carol)")
     print(f"   • Casual conversation (2 speakers with different emotions)")
-    print(f"   ✓ Total: 5 speakers × 2 = 10 files")
+    print(f"   ✓ Total: 5 speakers × 3 = 15 files")
     
     total_files = len(os.listdir(output_dir))
     total_size = sum(os.path.getsize(f"{output_dir}/{f}") for f in os.listdir(output_dir)) / (1024*1024)

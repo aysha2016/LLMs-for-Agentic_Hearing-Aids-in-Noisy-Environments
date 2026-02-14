@@ -175,6 +175,11 @@ class SpeechSynthesizer:
             return audio
         
         emotion_params = {
+            "neutral": {
+                "pitch_shift": 1.0,
+                "speed_factor": 1.0,
+                "amplitude": 1.0,
+            },
             "happy": {
                 "pitch_shift": 0.8,      # Higher pitch
                 "speed_factor": 1.1,    # Slightly faster
