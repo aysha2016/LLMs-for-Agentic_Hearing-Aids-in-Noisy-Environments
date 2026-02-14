@@ -243,7 +243,7 @@ class HearingAidController:
             return max(low, min(high, value))
 
         clamped['noise_suppression_strength'] = clamp(
-            float(clamped.get('noise_suppression_strength', 0.5)), 0.0, 0.6
+            float(clamped.get('noise_suppression_strength', 0.5)), 0.0, 0.65
         )
         clamped['speech_enhancement_level'] = clamp(
             float(clamped.get('speech_enhancement_level', 0.3)), 0.0, 0.5

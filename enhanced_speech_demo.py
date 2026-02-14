@@ -10,6 +10,7 @@ from datetime import datetime
 from scipy.io import wavfile
 
 from src.audio.speech_synthesizer import SpeechSynthesizer, SpeechScenarioGenerator, create_noisy_speech
+from src.audio.neural_denoiser import NeuralDenoiser
 from src.hearing_aid.controller import HearingAidController
 from src.hearing_aid.profiles import UserProfile
 
@@ -39,6 +40,15 @@ def save_wav(audio: np.ndarray, sample_rate: int, output_path: str) -> None:
 def has_audio(audio: np.ndarray) -> bool:
     """Return True when audio is non-empty."""
     return isinstance(audio, np.ndarray) and audio.size > 0
+
+
+def apply_neural_denoiser(denoiser: NeuralDenoiser, audio: np.ndarray) -> np.ndarray:
+    """Apply stronger neural denoising with fallback on errors."""
+    try:
+        return denoiser.denoise(audio, suppression_strength=0.8)
+    except Exception as exc:
+        print(f"   ⚠️  Neural denoising skipped: {exc}")
+        return audio
 
 
 def test_enhanced_synthetic_speech():
@@ -80,6 +90,15 @@ def test_enhanced_synthetic_speech():
         sample_rate=sample_rate
     )
     print("   ✓ Hearing aid controller ready")
+
+    print("\n🔧 Initializing neural denoiser...")
+    denoiser_model_path = "models/neural_denoiser.pt"
+    denoiser = NeuralDenoiser(
+        sample_rate=sample_rate,
+        model_path=denoiser_model_path if os.path.exists(denoiser_model_path) else None,
+        device="cpu"
+    )
+    print("   ✓ Neural denoiser ready")
     
     # ========================================================================
     # GENERATE VOICE VARIATIONS
@@ -105,8 +124,11 @@ def test_enhanced_synthetic_speech():
         noisy_file = f"{output_dir}/voice_noisy_{voice_type}.wav"
         save_wav(noisy_audio, sample_rate, noisy_file)
 
-        # Process noisy audio through hearing aid with LLM decision
-        result = controller.process_audio(noisy_audio, use_llm_decision=True, force_decision=True)
+        # Stronger denoise before LLM decision
+        denoised_audio = apply_neural_denoiser(denoiser, noisy_audio)
+
+        # Process denoised audio through hearing aid with LLM decision
+        result = controller.process_audio(denoised_audio, use_llm_decision=True, force_decision=True)
         proc_file = f"{output_dir}/voice_enhanced_{voice_type}.wav"
         if result['status'] == 'success':
             proc_audio = result['processed_audio']
@@ -140,8 +162,11 @@ def test_enhanced_synthetic_speech():
         noisy_file = f"{output_dir}/emotion_noisy_{emotion}.wav"
         save_wav(noisy_audio, sample_rate, noisy_file)
 
-        # Process noisy audio through hearing aid with LLM decision
-        result = controller.process_audio(noisy_audio, use_llm_decision=True, force_decision=True)
+        # Stronger denoise before LLM decision
+        denoised_audio = apply_neural_denoiser(denoiser, noisy_audio)
+
+        # Process denoised audio through hearing aid with LLM decision
+        result = controller.process_audio(denoised_audio, use_llm_decision=True, force_decision=True)
         proc_file = f"{output_dir}/emotion_enhanced_{emotion}.wav"
         if result['status'] == 'success':
             proc_audio = result['processed_audio']
@@ -169,7 +194,10 @@ def test_enhanced_synthetic_speech():
         noisy_file = f"{output_dir}/conference_noisy_{speaker}.wav"
         save_wav(noisy_audio, sample_rate, noisy_file)
 
-        result = controller.process_audio(noisy_audio, use_llm_decision=True, force_decision=True)
+        # Stronger denoise before LLM decision
+        denoised_audio = apply_neural_denoiser(denoiser, noisy_audio)
+
+        result = controller.process_audio(denoised_audio, use_llm_decision=True, force_decision=True)
         if result['status'] == 'success':
             proc_file = f"{output_dir}/conference_enhanced_{speaker}.wav"
             proc_audio = result['processed_audio']
@@ -192,7 +220,10 @@ def test_enhanced_synthetic_speech():
         noisy_file = f"{output_dir}/casual_noisy_{speaker}.wav"
         save_wav(noisy_audio, sample_rate, noisy_file)
 
-        result = controller.process_audio(noisy_audio, use_llm_decision=True, force_decision=True)
+        # Stronger denoise before LLM decision
+        denoised_audio = apply_neural_denoiser(denoiser, noisy_audio)
+
+        result = controller.process_audio(denoised_audio, use_llm_decision=True, force_decision=True)
         if result['status'] == 'success':
             proc_file = f"{output_dir}/casual_enhanced_{speaker}.wav"
             proc_audio = result['processed_audio']
