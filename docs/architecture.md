@@ -75,3 +75,97 @@ Processed Audio
 - Coordinates all components
 - Manages state and decision timing
 - Supports feedback refinement
+
+## Complete System Architecture
+
+This section expands the architecture to show the full pipeline, major modules, and the data flow between them.
+
+### End-to-End Pipeline
+
+1. **Input Capture**
+   - Audio streams enter the system at the device boundary (microphone or file input).
+   - The controller keeps input as waveform data locally and only exposes high-level descriptors to the LLM layer.
+
+2. **Feature Extraction (Observe)**
+   - `AudioFeatureExtractor` computes spectral, temporal, and semantic descriptors.
+   - Features include speech probability, noise level, spectral centroid, and scene classification.
+   - These descriptors are the only inputs to the decision layer.
+
+3. **Decision Layer (Reason)**
+   - `DecisionEngine` assembles prompts and decides a processing strategy.
+   - `SafetyValidator` checks for bounds, reversibility, and rationale requirements.
+   - The decision is converted into an `AudioProcessingStrategy` and clamped to safe ranges.
+
+4. **Neural Denoising Pre-Process (Act - Optional)**
+   - If enabled, a `HybridDenoiser` applies neural denoising first.
+   - Falls back to spectral subtraction if neural inference fails.
+   - This stage aims to reduce residual noise before DSP processing.
+
+5. **DSP Processing (Act)**
+   - `AudioProcessor` applies the strategy:
+   - Noise suppression
+   - Noise gate
+   - Speech enhancement
+   - Dynamic range compression
+   - Frequency shaping / EQ
+   - Output is clipped to safe audio bounds.
+
+6. **Feedback and Learning (Learn)**
+   - User feedback and objective metrics can refine future decisions.
+   - Strategy summaries are logged for explainability.
+
+### Data Flow (Detailed)
+
+```
+Audio Input (waveform)
+  ↓
+AudioFeatureExtractor
+  ↓
+Audio Features (descriptors only)
+  ↓
+DecisionEngine
+  ├─ PromptBuilder
+  ├─ SafetyValidator
+  └─ Strategy clamp
+  ↓
+AudioProcessingStrategy
+  ↓
+HybridDenoiser (optional)
+  ├─ NeuralDenoiser
+  └─ Spectral fallback
+  ↓
+AudioProcessor (DSP)
+  ├─ Noise suppression
+  ├─ Noise gate
+  ├─ Speech enhancement
+  ├─ Compression
+  └─ Frequency shaping
+  ↓
+Processed Audio Output
+  ↓
+Feedback Loop (optional)
+```
+
+### Component Responsibilities
+
+- **Controller**: Orchestrates the entire pipeline, enforces decision timing, and selects strategies.
+- **Feature Extraction**: Converts waveforms into safe, privacy-preserving descriptors.
+- **LLM Decision**: Generates bounded, reversible strategies with explicit rationale.
+- **Safety Validation**: Rejects unsafe outputs and clips parameters to allowed ranges.
+- **Neural Denoiser**: Reduces residual noise before DSP when enabled.
+- **DSP Processor**: Applies the final, safe transformations to the waveform.
+- **Feedback Loop**: Captures user feedback and improves future decisions.
+
+### Configuration Surface
+
+- **Audio feature parameters**: Sample rate, FFT, hop length, thresholds.
+- **Model parameters**: LLM model selection and safety enforcement.
+- **Strategy bounds**: Noise suppression and enhancement limits.
+- **Denoiser enablement**: Optional neural denoising with fallback.
+
+### Reliability and Safety Principles
+
+- Raw waveforms are never sent to the LLM layer.
+- Decisions are bounded, reversible, and logged.
+- Conservative defaults are used under uncertainty.
+- Fallbacks ensure audio passes through even when the neural path fails.

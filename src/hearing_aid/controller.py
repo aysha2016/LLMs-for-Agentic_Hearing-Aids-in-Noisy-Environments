@@ -7,6 +7,8 @@ import logging
 
 from src.audio.extractor import AudioFeatureExtractor
 from src.audio.processor import AudioProcessor, AudioProcessingStrategy
+from src.audio.neural_denoiser import NeuralDenoiser
+from src.audio.denoising_integration import HybridDenoiser
 from src.llm.decision_engine import DecisionEngine
 from src.hearing_aid.profiles import UserProfile
 from src.hearing_aid.strategies import ProcessingStrategyLibrary
@@ -27,7 +29,10 @@ class HearingAidController:
         model_name: str = "gpt-4",
         sample_rate: int = 16000,
         user_profile: Optional[UserProfile] = None,
-        llm_api_key: Optional[str] = None
+        llm_api_key: Optional[str] = None,
+        denoiser_model_path: Optional[str] = "models/neural_denoiser.pt",
+        denoiser_device: str = "cpu",
+        enable_neural_denoising: bool = True
     ):
         """
         Initialize hearing aid controller.
@@ -37,6 +42,9 @@ class HearingAidController:
             sample_rate: Audio sample rate in Hz
             user_profile: User profile (creates default if None)
             llm_api_key: API key for LLM service
+            denoiser_model_path: Path to neural denoiser weights (optional)
+            denoiser_device: Device for denoiser inference
+            enable_neural_denoising: Enable neural denoising pre-processing
         """
         self.sample_rate = sample_rate
         self.user_profile = user_profile or UserProfile()
@@ -50,6 +58,23 @@ class HearingAidController:
             enable_safety=True
         )
         self.strategy_library = ProcessingStrategyLibrary()
+
+        # Optional neural denoising pre-processing
+        self.denoiser: Optional[HybridDenoiser] = None
+        if enable_neural_denoising:
+            try:
+                neural = NeuralDenoiser(
+                    sample_rate=sample_rate,
+                    model_path=denoiser_model_path,
+                    device=denoiser_device
+                )
+                self.denoiser = HybridDenoiser(
+                    neural_denoiser=neural,
+                    use_neural=True,
+                    fallback_to_spectral=True
+                )
+            except Exception as exc:
+                logger.warning(f"Neural denoiser init failed: {exc}. Using DSP-only processing.")
         
         # State
         self.current_strategy: Optional[AudioProcessingStrategy] = None
@@ -81,12 +106,23 @@ class HearingAidController:
                 "strategy": None
             }
         
-        # Extract features
+        # Extract features from original audio for decision-making
         features = self.feature_extractor.extract_features(
             audio_stream,
             duration_ms=(len(audio_stream) / self.sample_rate) * 1000
         )
         features.timestamp = time.time()
+
+        # Optional denoising before DSP processing
+        audio_for_processing = audio_stream
+        if self.denoiser is not None:
+            try:
+                audio_for_processing = self.denoiser.denoise(
+                    audio_stream,
+                    suppression_strength=0.9
+                )
+            except Exception as exc:
+                logger.warning(f"Neural denoising failed: {exc}. Using raw audio.")
         
         # Decide on strategy
         should_decide = force_decision or self._should_make_decision()
@@ -105,7 +141,7 @@ class HearingAidController:
         
         # Apply processing
         processed_audio = self.audio_processor.apply_strategy(
-            audio_stream,
+            audio_for_processing,
             self.current_strategy
         )
         
@@ -133,12 +169,23 @@ class HearingAidController:
         Returns:
             Dictionary with processing results
         """
-        # Extract features
+        # Extract features from original audio for decision-making
         features = self.feature_extractor.extract_features(
             audio_stream,
             duration_ms=(len(audio_stream) / self.sample_rate) * 1000
         )
         features.timestamp = time.time()
+
+        # Optional denoising before DSP processing
+        audio_for_processing = audio_stream
+        if self.denoiser is not None:
+            try:
+                audio_for_processing = self.denoiser.denoise(
+                    audio_stream,
+                    suppression_strength=0.9
+                )
+            except Exception as exc:
+                logger.warning(f"Neural denoising failed: {exc}. Using raw audio.")
         
         # Get current strategy as dict
         current_strategy_dict = self._strategy_to_dict(self.current_strategy)
@@ -157,7 +204,7 @@ class HearingAidController:
         
         # Apply refined processing
         processed_audio = self.audio_processor.apply_strategy(
-            audio_stream,
+            audio_for_processing,
             self.current_strategy
         )
         
