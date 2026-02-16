@@ -103,7 +103,7 @@ The system operates as a multi-layer decision framework:
 ### Installation
 
 ```bash
-git clone https://github.com/yourusername/LLMs-for-Agentic_Hearing-Aids-in-Noisy-Environments.git
+git clone https://github.com/aysha16/LLMs-for-Agentic_Hearing-Aids-in-Noisy-Environments.git
 cd LLMs-for-Agentic_Hearing-Aids-in-Noisy-Environments
 pip install -r requirements.txt
 ```
