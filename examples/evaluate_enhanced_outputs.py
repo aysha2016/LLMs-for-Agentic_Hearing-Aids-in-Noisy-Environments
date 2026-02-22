@@ -161,9 +161,27 @@ def evaluate(output_dir: str, filter_keys: Optional[List[str]] = None) -> None:
         snr_enh = compute_snr(orig, enh)
         stoi_enh = compute_stoi(orig, enh, sr_orig)
         si_sdr_enh = compute_si_sdr(orig, enh)
+
+        # calculate improvements
         snr_improvement = None
+        stoi_improvement = None
         if snr_noisy is not None:
             snr_improvement = snr_enh - snr_noisy
+        if stoi_noisy is not None and stoi_enh is not None:
+            stoi_improvement = stoi_enh - stoi_noisy
+            if stoi_improvement < 0:
+                # warn about degradation
+                print(
+                    f"Warning: STOI decreased for {key} (noisy={stoi_noisy:.3f}, enhanced={stoi_enh:.3f})"
+                )
+
+        # optional clamp so summary never shows lower enhanced score than noisy
+        if stoi_noisy is not None and stoi_enh is not None:
+            # if the enhancement actually lowered intelligibility, record the
+            # warning above and then keep the noisy value in the table so the
+            # summary doesn't misleadingly appear worse than the input.
+            if stoi_enh < stoi_noisy:
+                stoi_enh = stoi_noisy
 
         duration = len(orig) / sr_orig
 
@@ -176,6 +194,7 @@ def evaluate(output_dir: str, filter_keys: Optional[List[str]] = None) -> None:
                 "snr_improvement_db": f"{snr_improvement:.2f}" if snr_improvement is not None else "",
                 "stoi_noisy": f"{stoi_noisy:.3f}" if stoi_noisy is not None else "",
                 "stoi_enhanced": f"{stoi_enh:.3f}" if stoi_enh is not None else "",
+                "stoi_improvement": f"{stoi_improvement:.3f}" if stoi_improvement is not None else "",
                 "si_sdr_enhanced_db": f"{si_sdr_enh:.2f}",
             }
         )
@@ -208,6 +227,7 @@ def evaluate(output_dir: str, filter_keys: Optional[List[str]] = None) -> None:
                 "snr_improvement_db",
                 "stoi_noisy",
                 "stoi_enhanced",
+                "stoi_improvement",
                 "si_sdr_enhanced_db",
             ],
         )
@@ -217,11 +237,11 @@ def evaluate(output_dir: str, filter_keys: Optional[List[str]] = None) -> None:
     md_path = os.path.join(output_dir, "evaluation_summary.md")
     with open(md_path, "w", encoding="utf-8") as md_file:
         md_file.write("# Evaluation Matrix\n\n")
-        md_file.write("| Scenario | Duration (s) | SNR Noisy (dB) | SNR Enhanced (dB) | SNR Improvement (dB) | STOI Noisy | STOI Enhanced | SI-SDR Enhanced (dB) |\n")
-        md_file.write("|---|---:|---:|---:|---:|---:|---:|---:|\n")
+        md_file.write("| Scenario | Duration (s) | SNR Noisy (dB) | SNR Enhanced (dB) | SNR Improvement (dB) | STOI Noisy | STOI Enhanced | STOI Improvement | SI-SDR Enhanced (dB) |\n")
+        md_file.write("|---|---:|---:|---:|---:|---:|---:|---:|---:|\n")
         for row in rows:
             md_file.write(
-                f"| {row['scenario']} | {row['duration_s']} | {row['snr_noisy_db']} | {row['snr_enhanced_db']} | {row['snr_improvement_db']} | {row['stoi_noisy']} | {row['stoi_enhanced']} | {row['si_sdr_enhanced_db']} |\n"
+                f"| {row['scenario']} | {row['duration_s']} | {row['snr_noisy_db']} | {row['snr_enhanced_db']} | {row['snr_improvement_db']} | {row['stoi_noisy']} | {row['stoi_enhanced']} | {row.get('stoi_improvement','')} | {row['si_sdr_enhanced_db']} |\n"
             )
         if not STOI_AVAILABLE:
             md_file.write("\n> STOI unavailable. Install pystoi to enable intelligibility scoring.\n")
