@@ -381,7 +381,7 @@ requirements.txt                 # Dependencies (updated with torch)
 
 ## Future Improvements
 
-1. **Multi-speaker separation**: Handle overlapping speakers
+1. **Multi-speaker separation**: (basic NMF implementation added in `speech_separation.py`)
 2. **Real-time learning**: Adapt to user's acoustic environment
 3. **Personalized models**: User-specific fine-tuning
 4. **Music preservation**: Better music quality retention

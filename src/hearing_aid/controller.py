@@ -86,18 +86,32 @@ class HearingAidController:
         self,
         audio_stream: np.ndarray,
         use_llm_decision: bool = True,
-        force_decision: bool = False
+        force_decision: bool = False,
+        use_speaker_separation: bool = False,
+        sep_n_sources: int = 2,
+        sep_preference: str = "loudest",
     ) -> Dict:
         """
         Process audio stream through the hearing aid system.
-        
+
+        Supports optional speaker separation when multiple voices are present.
+
         Args:
             audio_stream: Audio signal as numpy array
             use_llm_decision: Whether to use LLM for strategy selection
             force_decision: Force new decision even if within interval
-        
+            use_speaker_separation: If True, separate input into multiple sources
+            sep_n_sources: Number of sources to estimate during separation
+            sep_preference: If separation is used, choose one stream according to
+                this preference when returning a single output.
+
         Returns:
-            Dictionary with processing results
+            Dictionary with processing results.  When separation is enabled the
+            returned object includes additional keys:
+                - "separated_streams": list of source audio arrays
+                - "processed_streams": list of processed audio arrays
+                - "chosen_index": index of stream matching ``sep_preference``
+                - "chosen_audio": the chosen processed stream
         """
         if not self.processing_enabled:
             return {
@@ -105,7 +119,100 @@ class HearingAidController:
                 "processed_audio": audio_stream,
                 "strategy": None
             }
-        
+
+        # optionally perform speaker separation first
+        if use_speaker_separation:
+            try:
+                from src.audio.speech_separation import (
+                    separate_sources, select_preferred_source
+                )
+
+                sources = separate_sources(
+                    audio_stream,
+                    self.sample_rate,
+                    n_sources=sep_n_sources,
+                )
+            except Exception as exc:  # pragma: no cover - separation may fail
+                logger.warning(f"Speaker separation failed: {exc}")
+                use_speaker_separation = False
+                sources = []
+
+            if use_speaker_separation:
+                processed_list = []
+                strategy_list = []
+                features_list = []
+
+                # process each source independently through the regular pipeline
+                for src in sources:
+                    # feature extraction for this source
+                    feats = self.feature_extractor.extract_features(
+                        src,
+                        duration_ms=(len(src) / self.sample_rate) * 1000
+                    )
+                    feats.timestamp = time.time()
+                    features_list.append(feats)
+
+                    # optional denoising on component
+                    src_for_proc = src
+                    if self.denoiser is not None:
+                        try:
+                            src_for_proc = self.denoiser.denoise(
+                                src,
+                                suppression_strength=0.9
+                            )
+                        except Exception as exc:  # pragma: no cover
+                            logger.warning(f"Neural denoising failed on component: {exc}")
+
+                    # choose strategy for component
+                    if (force_decision or self._should_make_decision()) and use_llm_decision:
+                        strat_dict = self.decision_engine._decide_strategy_llm(
+                            feats,
+                            self.user_profile.to_dict()
+                        )
+                        strat_dict = self._clamp_strategy_dict(strat_dict)
+                        strat = self._dict_to_strategy(strat_dict)
+                        # store strat when first component decided
+                        if not self.current_strategy:
+                            self.current_strategy = strat
+                        self.last_decision_time = time.time()
+                    else:
+                        strat = self.current_strategy or self.strategy_library.get_strategy("quiet_office").strategy
+
+                    strategy_list.append(strat)
+
+                    processed_comp = self.audio_processor.apply_strategy(
+                        src_for_proc,
+                        strat
+                    )
+                    processed_list.append(processed_comp)
+
+                # determine chosen stream by preference
+                try:
+                    chosen_audio = select_preferred_source(
+                        processed_list,
+                        self.sample_rate,
+                        preference=sep_preference,
+                    )
+                    chosen_index = next(
+                        i for i, s in enumerate(processed_list) if np.allclose(s, chosen_audio, atol=1e-6)
+                    )
+                except Exception:
+                    chosen_index = 0
+                    chosen_audio = processed_list[0] if processed_list else np.array([])
+
+                return {
+                    "status": "success",
+                    "separated_streams": sources,
+                    "processed_streams": processed_list,
+                    "chosen_index": chosen_index,
+                    "chosen_audio": chosen_audio,
+                    "processed_audio": processed_list if processed_list else audio_stream,
+                    "strategies": strategy_list,
+                    "audio_features": features_list,
+                    "decision_made": True,
+                }
+
+        # --- regular processing when separation not used ---
         # Extract features from original audio for decision-making
         features = self.feature_extractor.extract_features(
             audio_stream,
@@ -123,10 +230,10 @@ class HearingAidController:
                 )
             except Exception as exc:
                 logger.warning(f"Neural denoising failed: {exc}. Using raw audio.")
-        
+
         # Decide on strategy
         should_decide = force_decision or self._should_make_decision()
-        
+
         if should_decide and use_llm_decision:
             strategy_dict = self.decision_engine._decide_strategy_llm(
                 features,
@@ -138,13 +245,13 @@ class HearingAidController:
         elif not self.current_strategy:
             # Use default strategy if none selected yet
             self.current_strategy = self.strategy_library.get_strategy("quiet_office").strategy
-        
+
         # Apply processing
         processed_audio = self.audio_processor.apply_strategy(
             audio_for_processing,
             self.current_strategy
         )
-        
+
         # Return results
         return {
             "status": "success",

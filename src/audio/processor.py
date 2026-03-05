@@ -151,6 +151,10 @@ class AudioProcessor:
             window_sum[start:start + n_fft] += window ** 2
 
         processed = processed / np.maximum(window_sum, 1e-8)
+        # pad if the overlap-add output was shorter than original signal
+        if len(processed) < len(signal):
+            pad = np.zeros(len(signal) - len(processed), dtype=processed.dtype)
+            processed = np.concatenate([processed, pad])
         return processed[:len(signal)]
     
     def _apply_noise_gate(self, signal: np.ndarray, threshold_db: float) -> np.ndarray:

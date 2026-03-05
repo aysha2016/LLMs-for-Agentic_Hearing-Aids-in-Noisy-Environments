@@ -156,6 +156,38 @@ print(result.confidence)
 - Personalized frequency shaping (neutral, speech-optimized, clarity-boost, comfort-focus)
 - Automatic strategy selection based on context and user preferences
 
+### Speaker Separation & Multi-Speaker Enhancement (Experimental)
+- A lightweight NMF-based source separation utility has been added
+  (`src/audio/speech_separation.py`).  It splits a mixed multi-speaker
+  signal into multiple streams and can choose one according to user
+  preference (loudest, quietest, highest/lowest pitch).
+- The main hearing aid controller now supports optional separation with
+  the `use_speaker_separation` flag.  When enabled, each estimated source
+  is processed through the ORAL decision pipeline independently, and the
+  preferred stream is returned.
+
+  ```python
+  controller = HearingAidController(sample_rate=sr, user_profile=user_profile)
+  result = controller.process_audio(
+      audio,
+      use_llm_decision=True,
+      use_speaker_separation=True,
+      sep_n_sources=2,
+      sep_preference="loudest",
+  )
+  processed_list = result["processed_streams"]            # list of streams
+  chosen = result["chosen_audio"]                         # preferred one
+  ```
+
+- CLI utility examples:
+  ```bash
+  python examples/speech_separation_demo.py \
+      --condition clean --scenario office_4speaker.wav \
+      --preference loudest
+  ```
+  and the multi-speaker dataset demo now illustrates separation and
+  controller processing together.
+
 ## Safety & Compliance
 
 ### Strict Rules (Non-Negotiable)

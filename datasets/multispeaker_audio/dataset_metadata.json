@@ -1,0 +1,259 @@
+{
+  "created": "2026-03-01T09:54:12.680928",
+  "sample_rate": 16000,
+  "conditions": {
+    "clean": {
+      "office_2speaker": {
+        "path": "datasets/multispeaker_audio/clean/office_2speaker.wav",
+        "duration": 8.0,
+        "size_mb": 0.24418258666992188,
+        "speakers": 2
+      },
+      "office_4speaker": {
+        "path": "datasets/multispeaker_audio/clean/office_4speaker.wav",
+        "duration": 10.0,
+        "size_mb": 0.3052177429199219,
+        "speakers": 4
+      },
+      "cafeteria_quiet": {
+        "path": "datasets/multispeaker_audio/clean/cafeteria_quiet.wav",
+        "duration": 10.0,
+        "size_mb": 0.3052177429199219,
+        "speakers": 3
+      },
+      "cafeteria_crowded": {
+        "path": "datasets/multispeaker_audio/clean/cafeteria_crowded.wav",
+        "duration": 15.0,
+        "size_mb": 0.4578056335449219,
+        "speakers": 6
+      },
+      "lecture_small": {
+        "path": "datasets/multispeaker_audio/clean/lecture_small.wav",
+        "duration": 15.0,
+        "size_mb": 0.4578056335449219,
+        "speakers": 2
+      },
+      "lecture_large": {
+        "path": "datasets/multispeaker_audio/clean/lecture_large.wav",
+        "duration": 20.0,
+        "size_mb": 0.6103935241699219,
+        "speakers": 4
+      },
+      "phone_3speaker": {
+        "path": "datasets/multispeaker_audio/clean/phone_3speaker.wav",
+        "duration": 10.0,
+        "size_mb": 0.3052177429199219,
+        "speakers": 3
+      },
+      "phone_5speaker": {
+        "path": "datasets/multispeaker_audio/clean/phone_5speaker.wav",
+        "duration": 15.0,
+        "size_mb": 0.4578056335449219,
+        "speakers": 5
+      }
+    },
+    "office_noise_12db": {
+      "office_2speaker": {
+        "path": "datasets/multispeaker_audio/office_noise_12db/office_2speaker.wav",
+        "duration": 8,
+        "size_mb": 0.24418258666992188,
+        "speakers": 2,
+        "noise_type": "office",
+        "snr_db": 12
+      },
+      "office_4speaker": {
+        "path": "datasets/multispeaker_audio/office_noise_12db/office_4speaker.wav",
+        "duration": 10,
+        "size_mb": 0.3052177429199219,
+        "speakers": 4,
+        "noise_type": "office",
+        "snr_db": 12
+      },
+      "cafeteria_quiet": {
+        "path": "datasets/multispeaker_audio/office_noise_12db/cafeteria_quiet.wav",
+        "duration": 10,
+        "size_mb": 0.3052177429199219,
+        "speakers": 3,
+        "noise_type": "office",
+        "snr_db": 12
+      },
+      "cafeteria_crowded": {
+        "path": "datasets/multispeaker_audio/office_noise_12db/cafeteria_crowded.wav",
+        "duration": 15,
+        "size_mb": 0.4578056335449219,
+        "speakers": 6,
+        "noise_type": "office",
+        "snr_db": 12
+      },
+      "lecture_small": {
+        "path": "datasets/multispeaker_audio/office_noise_12db/lecture_small.wav",
+        "duration": 15,
+        "size_mb": 0.4578056335449219,
+        "speakers": 2,
+        "noise_type": "office",
+        "snr_db": 12
+      },
+      "lecture_large": {
+        "path": "datasets/multispeaker_audio/office_noise_12db/lecture_large.wav",
+        "duration": 20,
+        "size_mb": 0.6103935241699219,
+        "speakers": 4,
+        "noise_type": "office",
+        "snr_db": 12
+      },
+      "phone_3speaker": {
+        "path": "datasets/multispeaker_audio/office_noise_12db/phone_3speaker.wav",
+        "duration": 10,
+        "size_mb": 0.3052177429199219,
+        "speakers": 3,
+        "noise_type": "office",
+        "snr_db": 12
+      },
+      "phone_5speaker": {
+        "path": "datasets/multispeaker_audio/office_noise_12db/phone_5speaker.wav",
+        "duration": 15,
+        "size_mb": 0.4578056335449219,
+        "speakers": 5,
+        "noise_type": "office",
+        "snr_db": 12
+      }
+    },
+    "cafeteria_noise_10db": {
+      "office_2speaker": {
+        "path": "datasets/multispeaker_audio/cafeteria_noise_10db/office_2speaker.wav",
+        "duration": 8,
+        "size_mb": 0.24418258666992188,
+        "speakers": 2,
+        "noise_type": "restaurant",
+        "snr_db": 10
+      },
+      "office_4speaker": {
+        "path": "datasets/multispeaker_audio/cafeteria_noise_10db/office_4speaker.wav",
+        "duration": 10,
+        "size_mb": 0.3052177429199219,
+        "speakers": 4,
+        "noise_type": "restaurant",
+        "snr_db": 10
+      },
+      "cafeteria_quiet": {
+        "path": "datasets/multispeaker_audio/cafeteria_noise_10db/cafeteria_quiet.wav",
+        "duration": 10,
+        "size_mb": 0.3052177429199219,
+        "speakers": 3,
+        "noise_type": "restaurant",
+        "snr_db": 10
+      },
+      "cafeteria_crowded": {
+        "path": "datasets/multispeaker_audio/cafeteria_noise_10db/cafeteria_crowded.wav",
+        "duration": 15,
+        "size_mb": 0.4578056335449219,
+        "speakers": 6,
+        "noise_type": "restaurant",
+        "snr_db": 10
+      },
+      "lecture_small": {
+        "path": "datasets/multispeaker_audio/cafeteria_noise_10db/lecture_small.wav",
+        "duration": 15,
+        "size_mb": 0.4578056335449219,
+        "speakers": 2,
+        "noise_type": "restaurant",
+        "snr_db": 10
+      },
+      "lecture_large": {
+        "path": "datasets/multispeaker_audio/cafeteria_noise_10db/lecture_large.wav",
+        "duration": 20,
+        "size_mb": 0.6103935241699219,
+        "speakers": 4,
+        "noise_type": "restaurant",
+        "snr_db": 10
+      },
+      "phone_3speaker": {
+        "path": "datasets/multispeaker_audio/cafeteria_noise_10db/phone_3speaker.wav",
+        "duration": 10,
+        "size_mb": 0.3052177429199219,
+        "speakers": 3,
+        "noise_type": "restaurant",
+        "snr_db": 10
+      },
+      "phone_5speaker": {
+        "path": "datasets/multispeaker_audio/cafeteria_noise_10db/phone_5speaker.wav",
+        "duration": 15,
+        "size_mb": 0.4578056335449219,
+        "speakers": 5,
+        "noise_type": "restaurant",
+        "snr_db": 10
+      }
+    },
+    "traffic_noise_8db": {
+      "office_2speaker": {
+        "path": "datasets/multispeaker_audio/traffic_noise_8db/office_2speaker.wav",
+        "duration": 8,
+        "size_mb": 0.24418258666992188,
+        "speakers": 2,
+        "noise_type": "traffic",
+        "snr_db": 8
+      },
+      "office_4speaker": {
+        "path": "datasets/multispeaker_audio/traffic_noise_8db/office_4speaker.wav",
+        "duration": 10,
+        "size_mb": 0.3052177429199219,
+        "speakers": 4,
+        "noise_type": "traffic",
+        "snr_db": 8
+      },
+      "cafeteria_quiet": {
+        "path": "datasets/multispeaker_audio/traffic_noise_8db/cafeteria_quiet.wav",
+        "duration": 10,
+        "size_mb": 0.3052177429199219,
+        "speakers": 3,
+        "noise_type": "traffic",
+        "snr_db": 8
+      },
+      "cafeteria_crowded": {
+        "path": "datasets/multispeaker_audio/traffic_noise_8db/cafeteria_crowded.wav",
+        "duration": 15,
+        "size_mb": 0.4578056335449219,
+        "speakers": 6,
+        "noise_type": "traffic",
+        "snr_db": 8
+      },
+      "lecture_small": {
+        "path": "datasets/multispeaker_audio/traffic_noise_8db/lecture_small.wav",
+        "duration": 15,
+        "size_mb": 0.4578056335449219,
+        "speakers": 2,
+        "noise_type": "traffic",
+        "snr_db": 8
+      },
+      "lecture_large": {
+        "path": "datasets/multispeaker_audio/traffic_noise_8db/lecture_large.wav",
+        "duration": 20,
+        "size_mb": 0.6103935241699219,
+        "speakers": 4,
+        "noise_type": "traffic",
+        "snr_db": 8
+      },
+      "phone_3speaker": {
+        "path": "datasets/multispeaker_audio/traffic_noise_8db/phone_3speaker.wav",
+        "duration": 10,
+        "size_mb": 0.3052177429199219,
+        "speakers": 3,
+        "noise_type": "traffic",
+        "snr_db": 8
+      },
+      "phone_5speaker": {
+        "path": "datasets/multispeaker_audio/traffic_noise_8db/phone_5speaker.wav",
+        "duration": 15,
+        "size_mb": 0.4578056335449219,
+        "speakers": 5,
+        "noise_type": "traffic",
+        "snr_db": 8
+      }
+    }
+  },
+  "statistics": {
+    "total_files": 32,
+    "total_duration_sec": 412.0,
+    "total_size_mb": 12.5745849609375
+  }
+}
