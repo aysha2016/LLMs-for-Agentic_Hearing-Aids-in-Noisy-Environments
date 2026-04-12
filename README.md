@@ -9,6 +9,32 @@ This repository explores how Large Language Models can be used as safe, agentic 
 - **Personalized Listening Strategies**: User preference-based audio processing and adaptation
 - **Waveform-Free Processing**: Audio analysis and decision-making without direct waveform manipulation
 
+## Selected Research Contributions
+
+### 1. Real-Time Audio-Visual Active Speaker Detection System
+- Built a multimodal, real-time active speaker detector combining lip-motion analysis and audio cues.
+- Integrated Conformer-style blocks (multi-head self-attention, convolution, feed-forward) into U-Net-like architectures.
+- Implemented synchronized audio–video feature extraction and multi-face tracking with per-speaker temporal alignment.
+- Achieved robust active-speaker performance in noisy, overlapping-speech environments.
+
+### 2. Deep Complex U-Net (DCUC-Net) with Multimodal Fusion
+- Extended Deep Complex U-Net to fuse visual features and attention pathways for audio-visual speech enhancement.
+- Developed complex-valued neural networks that model both real and imaginary spectral components.
+- Designed cross-modal fusion strategies for injecting visual embeddings into the spectral domain.
+- Used Conformer layers to capture both global and local audio-visual dependencies.
+
+### 3. AI-Driven Audio-Visual Avatar Dataset (8K+ Avatars)
+- Created a large-scale dataset of over 8,400 synthetic avatars from CHAMELEON-style videos.
+- Built data generation pipelines with noise injection and domain randomization.
+- Designed benchmarking protocols to compare real versus avatar latency and perceived quality.
+- Enabled scalable, controlled experiments for real-time audio-visual system development.
+
+### 4. Agentic LLM-Based Audio-Only “Hearing Aid” System
+- Developed an agentic hearing system that dynamically adapts responses based on audio context.
+- Designed a decision-making architecture with reasoning and adaptive feedback loops.
+- Implemented context-aware audio understanding while meeting real-time processing constraints.
+- Shifted the hearing aid approach from passive enhancement toward interactive intelligence.
+
 ## Core Architecture: Observe-Reason-Act-Learn (ORAL) Loop
 
 The system implements a continuous decision loop that ensures safe, explainable, and adaptive hearing aid control:
@@ -188,6 +214,14 @@ print(result.confidence)
   and the multi-speaker dataset demo now illustrates separation and
   controller processing together.
 
+  ```bash
+  python examples/intent_adaptive_simulation.py \
+      --output-dir output_intent_simulation \
+      --scenario office_meeting \
+      --noise-type office \
+      --snr-db 12
+  ```
+
 ## Safety & Compliance
 
 ### Strict Rules (Non-Negotiable)
@@ -253,6 +287,9 @@ Test coverage includes:
 
 - **Latency**: Optimized for real-time inference (target < 200ms)
 - **Power Consumption**: Efficient feature extraction for battery operation
+- **Memory Usage**: Monitored and measured for streaming efficiency
+- **Benchmarking**: Compare proposed system vs DSP baselines with `tools/benchmark_pipeline.py`
+- **Evaluation Framework**: Run multi-talker metrics collection with `tools/evaluation_harness.py`
 - **Accuracy**: Validated on diverse acoustic environments
 - **Safety**: 100% compliance with all constraints before execution
 
@@ -262,6 +299,8 @@ Test coverage includes:
 - **[Core Requirements](docs/core_requirements.md)**: Strict safety rules and responsibilities
 - **[Audio Features](docs/audio_features.md)**: Feature extraction and descriptors
 - **[API Reference](docs/api_reference.md)**: Complete system API documentation
+- **[Benchmarking Results](BENCHMARK_RESULTS.md)**: Latency, memory, and energy metrics
+- **[Benchmarking Guide](docs/benchmarking.md)**: How to run and interpret benchmarks
 
 ## Contributing
 
