@@ -3,6 +3,13 @@
 import numpy as np
 from typing import Optional, Tuple
 from .features import AudioFeatureSet
+from src.utils.audio_ops import (
+    compute_rms,
+    amplitude_to_db,
+    compute_rfft,
+    compute_spectral_centroid,
+    compute_zero_crossing_rate,
+)
 
 
 class AudioFeatureExtractor:
@@ -61,35 +68,23 @@ class AudioFeatureExtractor:
     
     def _compute_spectral_centroid(self, signal: np.ndarray) -> float:
         """Compute spectral centroid in Hz."""
-        # Compute FFT
-        fft = np.fft.rfft(signal)
-        magnitude = np.abs(fft)
-        freqs = np.fft.rfftfreq(len(signal), 1/self.sample_rate)
-        
-        # Weighted average frequency
-        centroid = np.sum(freqs * magnitude) / np.sum(magnitude) if np.sum(magnitude) > 0 else 0
-        return float(centroid)
+        return compute_spectral_centroid(signal, self.sample_rate)
     
     def _compute_spectral_rolloff(self, signal: np.ndarray, threshold: float = 0.85) -> float:
         """Compute frequency below which 85% of energy is concentrated."""
-        fft = np.fft.rfft(signal)
-        magnitude = np.abs(fft)
-        freqs = np.fft.rfftfreq(len(signal), 1/self.sample_rate)
-        
-        # Cumulative energy
+        magnitude, _, freqs = compute_rfft(signal, self.sample_rate)
+
         cumsum = np.cumsum(magnitude)
         total_energy = cumsum[-1] if len(cumsum) > 0 else 1
-        
-        # Find frequency at threshold
+
         idx = np.where(cumsum >= threshold * total_energy)[0]
         rolloff = freqs[idx[0]] if len(idx) > 0 else 0
-        
+
         return float(rolloff)
     
     def _compute_zcr(self, signal: np.ndarray) -> float:
         """Compute zero crossing rate."""
-        zcr = np.mean(np.abs(np.diff(np.sign(signal)))) / 2
-        return float(zcr)
+        return compute_zero_crossing_rate(signal)
     
     def _compute_onset_strength(self, signal: np.ndarray) -> float:
         """Compute onset detection energy."""
@@ -100,12 +95,7 @@ class AudioFeatureExtractor:
     
     def _estimate_noise_level(self, signal: np.ndarray) -> float:
         """Estimate noise floor in dB."""
-        # RMS level in dB
-        rms = np.sqrt(np.mean(signal ** 2))
-        # Avoid log(0)
-        rms = max(rms, 1e-10)
-        db_level = 20 * np.log10(rms)
-        return float(db_level)
+        return amplitude_to_db(compute_rms(signal))
     
     def _estimate_speech_probability(self, signal: np.ndarray) -> float:
         """Estimate probability of speech presence."""

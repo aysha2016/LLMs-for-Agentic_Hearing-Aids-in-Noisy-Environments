@@ -3,6 +3,7 @@
 import numpy as np
 from typing import Dict, Optional
 from dataclasses import dataclass
+from src.utils.audio_ops import compute_rfft, db_to_amplitude
 
 
 @dataclass
@@ -184,18 +185,15 @@ class AudioProcessor:
         level: float
     ) -> np.ndarray:
         """Apply speech enhancement through spectral emphasis."""
-        fft = np.fft.rfft(signal)
-        freqs = np.fft.rfftfreq(len(signal), 1/self.sample_rate)
-        
-        # Emphasize speech frequencies (300-3000 Hz)
+        magnitude, phase, freqs = compute_rfft(signal, self.sample_rate)
+        spec = magnitude * np.exp(1j * phase)
+
         emphasis = np.ones_like(freqs)
         speech_band = (freqs >= 300) & (freqs <= 3000)
         emphasis[speech_band] = 1.0 + level * 0.5
-        
-        fft_enhanced = fft * emphasis
-        processed = np.fft.irfft(fft_enhanced, n=len(signal))
-        
-        return processed
+
+        fft_enhanced = spec * emphasis
+        return np.fft.irfft(fft_enhanced, n=len(signal))
     
     def _apply_compression(
         self,
@@ -222,15 +220,14 @@ class AudioProcessor:
         emphasis_dict: Dict[str, float]
     ) -> np.ndarray:
         """Apply custom frequency band emphasis."""
-        fft = np.fft.rfft(signal)
-        freqs = np.fft.rfftfreq(len(signal), 1/self.sample_rate)
-        
+        magnitude, phase, freqs = compute_rfft(signal, self.sample_rate)
+        spec = magnitude * np.exp(1j * phase)
+
         emphasis = np.ones_like(freqs)
-        
-        # Apply band-specific emphasis
+
         for band, gain_db in emphasis_dict.items():
-            gain_linear = 10 ** (gain_db / 20)
-            
+            gain_linear = db_to_amplitude(gain_db)
+
             if band == "low":
                 mask = freqs < 500
             elif band == "mid_low":
@@ -241,13 +238,11 @@ class AudioProcessor:
                 mask = freqs >= 8000
             else:
                 continue
-            
+
             emphasis[mask] *= gain_linear
-        
-        fft_emphasized = fft * emphasis
-        processed = np.fft.irfft(fft_emphasized, n=len(signal))
-        
-        return processed
+
+        fft_emphasized = spec * emphasis
+        return np.fft.irfft(fft_emphasized, n=len(signal))
     
     def _apply_frequency_adjustments(
         self,
@@ -256,21 +251,13 @@ class AudioProcessor:
         low_freq_reduction_db: float
     ) -> np.ndarray:
         """Apply high/low frequency adjustments."""
-        fft = np.fft.rfft(signal)
-        freqs = np.fft.rfftfreq(len(signal), 1/self.sample_rate)
-        
-        # High frequency boost (presence peak)
+        magnitude, phase, freqs = compute_rfft(signal, self.sample_rate)
+        spec = magnitude * np.exp(1j * phase)
+
         if high_freq_boost_db != 0:
-            boost_linear = 10 ** (high_freq_boost_db / 20)
-            high_freq_mask = freqs > 4000
-            fft[high_freq_mask] *= boost_linear
-        
-        # Low frequency reduction (rumble filter)
+            spec[freqs > 4000] *= db_to_amplitude(high_freq_boost_db)
+
         if low_freq_reduction_db != 0:
-            reduction_linear = 10 ** (low_freq_reduction_db / 20)
-            low_freq_mask = freqs < 200
-            fft[low_freq_mask] *= reduction_linear
-        
-        processed = np.fft.irfft(fft, n=len(signal))
-        
-        return processed
+            spec[freqs < 200] *= db_to_amplitude(low_freq_reduction_db)
+
+        return np.fft.irfft(spec, n=len(signal))

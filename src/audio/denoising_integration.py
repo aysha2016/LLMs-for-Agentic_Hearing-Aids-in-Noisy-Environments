@@ -4,6 +4,7 @@ import numpy as np
 from typing import Optional, Dict
 import logging
 from .neural_denoiser import NeuralDenoiser
+from src.utils.audio_ops import compute_rfft
 
 logger = logging.getLogger(__name__)
 
@@ -110,13 +111,10 @@ class HybridDenoiser:
         Returns:
             Denoised audio
         """
-        # Compute STFT
         n_fft = 512
         hop_length = 160
-        
-        spec = np.fft.rfft(signal)
-        mag = np.abs(spec)
-        phase = np.angle(spec)
+
+        mag, phase, _ = compute_rfft(signal, 16000)
         
         # Estimate noise spectrum if not provided
         if noise_profile is None:
@@ -150,8 +148,7 @@ class HybridDenoiser:
         segment_samples = int(sample_rate * segment_duration_ms / 1000)
         segment = signal[:segment_samples]
         
-        spec = np.fft.rfft(segment)
-        mag = np.abs(spec)
+        mag, _, _ = compute_rfft(segment, sample_rate)
         noise_profile = np.mean(mag)
         
         return noise_profile
