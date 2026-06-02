@@ -153,7 +153,7 @@ class NeuralDenoiser:
     
     def load_model(self, model_path: str) -> None:
         """Load pre-trained model weights."""
-        checkpoint = torch.load(model_path, map_location=self.device)
+        checkpoint = torch.load(model_path, map_location=self.device, weights_only=True)
         if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
             self.model.load_state_dict(checkpoint['model_state_dict'])
         else:

@@ -7,7 +7,11 @@ import numpy as np
 import logging
 from pathlib import Path
 import sys
-sys.path.insert(0, '/workspaces/LLMs-for-Agentic_Hearing-Aids-in-Noisy-Environments')
+
+# Add project root to path (parent of examples/)
+_project_root = str(Path(__file__).resolve().parent.parent)
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 from src.audio.neural_denoiser import NeuralDenoiser
 from src.audio.denoising_integration import HybridDenoiser, DenoisingAwareFeatureExtractor
@@ -15,10 +19,10 @@ from src.audio.extractor import AudioFeatureExtractor
 from src.hearing_aid.controller import HearingAidController
 from src.hearing_aid.profiles import UserProfile
 
-# Import generate_synthetic_dataset directly
+# Import generate_synthetic_dataset from sibling module
 import importlib.util
-spec = importlib.util.spec_from_file_location("synthetic_demo", 
-    "/workspaces/LLMs-for-Agentic_Hearing-Aids-in-Noisy-Environments/examples/synthetic_dataset_demo.py")
+_synthetic_demo_path = str(Path(__file__).resolve().parent / "synthetic_dataset_demo.py")
+spec = importlib.util.spec_from_file_location("synthetic_demo", _synthetic_demo_path)
 synthetic_demo = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(synthetic_demo)
 generate_synthetic_dataset = synthetic_demo.generate_synthetic_dataset
