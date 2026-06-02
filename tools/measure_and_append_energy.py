@@ -116,7 +116,8 @@ def update_csv(csv_path, scenario, energy_j):
         if row_map.get("scenario", "") == scenario:
             try:
                 duration = float(row_map.get("duration_s", "0") or "0")
-            except Exception:
+            except (ValueError, TypeError) as exc:
+                print(f"Warning: could not parse duration for {scenario}: {exc}", file=sys.stderr)
                 duration = 0.0
             row_map["energy_J_total"] = "%.6f" % energy_j
             per_s = energy_j / duration if duration > 0 else 0.0
@@ -204,8 +205,8 @@ def main():
             if method == "nvidia":
                 p_w = read_nvidia_power_w()
                 samples.append((time.time() - start, p_w))
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"Final power sample failed: {exc}", file=sys.stderr)
 
         total_energy = integrate_energy(samples)
         print(f"Measured energy (J): {total_energy:.6f}")
@@ -217,7 +218,8 @@ def main():
     finally:
         try:
             out, err = popen.communicate(timeout=1)
-        except Exception:
+        except Exception as exc:
+            print(f"Process cleanup failed ({exc}), killing.", file=sys.stderr)
             popen.kill()
 
 

@@ -218,5 +218,7 @@ class DenoisingAwareFeatureExtractor:
                 logger.warning(f"Denoising failed: {e}. Returning base features only.")
                 result['denoised_features'] = base_features
                 result['denoised_audio'] = audio_signal
+                result['denoising_failed'] = True
+                result['denoising_error'] = str(e)
         
         return result

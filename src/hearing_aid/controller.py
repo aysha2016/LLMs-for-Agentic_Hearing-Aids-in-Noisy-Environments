@@ -162,6 +162,7 @@ class HearingAidController:
                             )
                         except Exception as exc:  # pragma: no cover
                             logger.warning(f"Neural denoising failed on component: {exc}")
+                            src_for_proc = src
 
                     # choose strategy for component
                     if (force_decision or self._should_make_decision()) and use_llm_decision:
@@ -196,7 +197,8 @@ class HearingAidController:
                     chosen_index = next(
                         i for i, s in enumerate(processed_list) if np.allclose(s, chosen_audio, atol=1e-6)
                     )
-                except Exception:
+                except Exception as exc:
+                    logger.warning(f"Preferred source selection failed: {exc}. Falling back to first stream.")
                     chosen_index = 0
                     chosen_audio = processed_list[0] if processed_list else np.array([])
 
