@@ -6,6 +6,13 @@ from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass, asdict
 import json
 import csv
+from src.utils.audio_ops import (
+    compute_rms,
+    amplitude_to_db,
+    compute_rfft,
+    compute_spectral_centroid,
+    compute_zero_crossing_rate,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -76,32 +83,29 @@ class MultiSpeakerEvaluator:
         duration = len(audio) / self.sample_rate
         
         # Level measurements
-        rms_level = np.sqrt(np.mean(audio ** 2))
-        rms_db = 20 * np.log10(rms_level + 1e-8)
-        peak_level = np.max(np.abs(audio))
-        peak_db = 20 * np.log10(peak_level + 1e-8)
+        rms_level = compute_rms(audio)
+        rms_db = amplitude_to_db(rms_level)
+        peak_level = float(np.max(np.abs(audio)))
+        peak_db = amplitude_to_db(peak_level)
         dynamic_range = peak_db - rms_db
         crest_factor = peak_level / (rms_level + 1e-8)
-        
+
         # Spectral analysis
-        fft = np.fft.rfft(audio)
-        magnitude = np.abs(fft)
-        freqs = np.fft.rfftfreq(len(audio), 1/self.sample_rate)
-        
-        # Spectral centroid
-        spectral_centroid = np.sum(freqs * magnitude) / (np.sum(magnitude) + 1e-8)
-        
+        magnitude, _, freqs = compute_rfft(audio, self.sample_rate)
+
+        spectral_centroid = compute_spectral_centroid(audio, self.sample_rate)
+
         # Spectral spread (bandwidth)
         spectral_spread = np.sqrt(
             np.sum(magnitude * (freqs - spectral_centroid) ** 2) / (np.sum(magnitude) + 1e-8)
         )
-        
+
         # Spectral complexity (entropy)
         power_spectrum = magnitude ** 2 / (np.sum(magnitude ** 2) + 1e-8)
         spectral_complexity = -np.sum(power_spectrum * np.log(power_spectrum + 1e-8))
-        
+
         # Temporal features
-        zero_crossing_rate = np.mean(np.abs(np.diff(np.sign(audio)))) / 2
+        zero_crossing_rate = compute_zero_crossing_rate(audio)
         
         # Temporal complexity (variation in energy)
         frame_length = self.sample_rate // 100  # 10ms frames
@@ -197,7 +201,7 @@ class MultiSpeakerEvaluator:
             total_frames += 1
             
             # Speech typically has moderate ZCR and good energy
-            zcr = np.mean(np.abs(np.diff(np.sign(frame)))) / 2
+            zcr = compute_zero_crossing_rate(frame)
             energy = np.mean(frame ** 2)
             
             # Simple heuristic for speech detection
@@ -221,9 +225,7 @@ class MultiSpeakerEvaluator:
             Estimated number of speakers
         """
         # Analyze variance in different frequency bands
-        fft = np.fft.rfft(audio)
-        magnitude = np.abs(fft)
-        freqs = np.fft.rfftfreq(len(audio), 1/self.sample_rate)
+        magnitude, _, freqs = compute_rfft(audio, self.sample_rate)
         
         # Divide into frequency bands (typical speech formants)
         bands = {

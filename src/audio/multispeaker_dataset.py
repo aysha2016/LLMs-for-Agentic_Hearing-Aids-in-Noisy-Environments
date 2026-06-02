@@ -5,6 +5,12 @@ import logging
 from typing import Dict, List, Tuple, Optional
 from scipy.io import wavfile
 import os
+from src.utils.audio_ops import (
+    normalize_signal,
+    normalize_peak,
+    mix_audio_at_offset,
+    add_noise_at_snr,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,25 +57,12 @@ class MultiSpeakerScenarioGenerator:
             start_time = i * (duration_sec / num_speakers)
             speaker_audio = self._generate_synthetic_speech(speaker_texts[i])
             
-            # Normalize and apply gain
             if len(speaker_audio) > 0:
-                speaker_audio = speaker_audio / (np.max(np.abs(speaker_audio)) + 1e-8)
-                speaker_audio = speaker_audio * (0.8 / num_speakers)  # Reduce volume per speaker
-                
-                # Add to mix at offset
+                speaker_audio = normalize_signal(speaker_audio) * (0.8 / num_speakers)
                 start_sample = int(start_time * self.sample_rate)
-                end_sample = min(start_sample + len(speaker_audio), len(mixed_audio))
-                actual_len = end_sample - start_sample
-                
-                if actual_len > 0:
-                    mixed_audio[start_sample:end_sample] += speaker_audio[:actual_len]
-        
-        # Normalize final mix
-        max_val = np.max(np.abs(mixed_audio))
-        if max_val > 0:
-            mixed_audio = mixed_audio / max_val * 0.95
-        
-        return mixed_audio
+                mix_audio_at_offset(mixed_audio, speaker_audio, start_sample)
+
+        return normalize_peak(mixed_audio)
     
     def create_crowded_cafeteria(self, num_speakers: int = 6, duration_sec: float = 15.0) -> np.ndarray:
         """
@@ -97,28 +90,17 @@ class MultiSpeakerScenarioGenerator:
         
         # Create more chaotic overlapping
         for i in range(min(num_speakers, len(speaker_texts))):
-            # Random start times for more realistic overlap
             start_time = np.random.uniform(0, duration_sec * 0.7)
             duration = np.random.uniform(2, 5)
-            
+
             speaker_audio = self._generate_synthetic_speech(speaker_texts[i])
-            
+
             if len(speaker_audio) > 0:
-                speaker_audio = speaker_audio / (np.max(np.abs(speaker_audio)) + 1e-8)
-                speaker_audio = speaker_audio * (0.7 / num_speakers)
-                
+                speaker_audio = normalize_signal(speaker_audio) * (0.7 / num_speakers)
                 start_sample = int(start_time * self.sample_rate)
-                end_sample = min(start_sample + len(speaker_audio), len(mixed_audio))
-                actual_len = end_sample - start_sample
-                
-                if actual_len > 0:
-                    mixed_audio[start_sample:end_sample] += speaker_audio[:actual_len]
-        
-        max_val = np.max(np.abs(mixed_audio))
-        if max_val > 0:
-            mixed_audio = mixed_audio / max_val * 0.95
-        
-        return mixed_audio
+                mix_audio_at_offset(mixed_audio, speaker_audio, start_sample)
+
+        return normalize_peak(mixed_audio)
     
     def create_lecture_hall(self, num_speakers: int = 3, duration_sec: float = 20.0) -> np.ndarray:
         """
@@ -146,9 +128,7 @@ class MultiSpeakerScenarioGenerator:
         # Lecturer (dominant)
         lecturer_audio = self._generate_synthetic_speech(lecturer_text)
         if len(lecturer_audio) > 0:
-            lecturer_audio = lecturer_audio / (np.max(np.abs(lecturer_audio)) + 1e-8)
-            lecturer_audio = lecturer_audio * 0.8
-            
+            lecturer_audio = normalize_signal(lecturer_audio) * 0.8
             duration_samples = min(len(lecturer_audio), int(duration_sec * self.sample_rate))
             mixed_audio[:duration_samples] += lecturer_audio[:duration_samples]
         
@@ -158,21 +138,11 @@ class MultiSpeakerScenarioGenerator:
             question_audio = self._generate_synthetic_speech(audience_questions[i])
             
             if len(question_audio) > 0:
-                question_audio = question_audio / (np.max(np.abs(question_audio)) + 1e-8)
-                question_audio = question_audio * 0.4  # Lower volume for questions
-                
+                question_audio = normalize_signal(question_audio) * 0.4
                 start_sample = int(start_time * self.sample_rate)
-                end_sample = min(start_sample + len(question_audio), len(mixed_audio))
-                actual_len = end_sample - start_sample
-                
-                if actual_len > 0:
-                    mixed_audio[start_sample:end_sample] += question_audio[:actual_len]
-        
-        max_val = np.max(np.abs(mixed_audio))
-        if max_val > 0:
-            mixed_audio = mixed_audio / max_val * 0.95
-        
-        return mixed_audio
+                mix_audio_at_offset(mixed_audio, question_audio, start_sample)
+
+        return normalize_peak(mixed_audio)
     
     def create_phone_conference(self, num_speakers: int = 4, duration_sec: float = 12.0) -> np.ndarray:
         """
@@ -202,21 +172,11 @@ class MultiSpeakerScenarioGenerator:
             speaker_audio = self._generate_synthetic_speech(texts[i])
             
             if len(speaker_audio) > 0:
-                speaker_audio = speaker_audio / (np.max(np.abs(speaker_audio)) + 1e-8)
-                speaker_audio = speaker_audio * 0.75
-                
+                speaker_audio = normalize_signal(speaker_audio) * 0.75
                 start_sample = int(start_time * self.sample_rate)
-                end_sample = min(start_sample + len(speaker_audio), len(mixed_audio))
-                actual_len = end_sample - start_sample
-                
-                if actual_len > 0:
-                    mixed_audio[start_sample:end_sample] += speaker_audio[:actual_len]
-        
-        max_val = np.max(np.abs(mixed_audio))
-        if max_val > 0:
-            mixed_audio = mixed_audio / max_val * 0.95
-        
-        return mixed_audio
+                mix_audio_at_offset(mixed_audio, speaker_audio, start_sample)
+
+        return normalize_peak(mixed_audio)
     
     def add_background_noise(self, audio: np.ndarray, noise_type: str = "office", snr_db: float = 15.0) -> np.ndarray:
         """
@@ -260,22 +220,13 @@ class MultiSpeakerScenarioGenerator:
         else:
             noise = np.random.randn(len(audio))
         
-        # Normalize noise
-        noise = noise / (np.max(np.abs(noise)) + 1e-8)
-        
-        # Calculate signal power
-        signal_power = np.mean(audio ** 2)
-        noise_power = signal_power / (10 ** (snr_db / 10))
-        
-        # Apply noise
-        noise = noise * np.sqrt(noise_power)
-        noisy_audio = audio + noise
-        
-        # Prevent clipping
+        noise = normalize_signal(noise)
+        noisy_audio = add_noise_at_snr(audio, noise, snr_db)
+
         max_val = np.max(np.abs(noisy_audio))
         if max_val > 1.0:
-            noisy_audio = noisy_audio / max_val * 0.95
-        
+            noisy_audio = normalize_peak(noisy_audio)
+
         return noisy_audio
     
     def _generate_synthetic_speech(self, text: str) -> np.ndarray:

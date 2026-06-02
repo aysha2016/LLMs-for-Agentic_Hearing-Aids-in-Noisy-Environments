@@ -16,6 +16,7 @@ from typing import List, Tuple
 import numpy as np
 import librosa
 from sklearn.decomposition import NMF
+from src.utils.audio_ops import compute_rms
 
 
 def separate_sources(
@@ -61,7 +62,7 @@ def separate_sources(
 
 
 def _compute_rms(audio: np.ndarray) -> float:
-    return float(np.sqrt(np.mean(audio ** 2)))
+    return compute_rms(audio)
 
 
 def _compute_spectral_centroid(audio: np.ndarray, sr: int) -> float:

@@ -2,6 +2,7 @@
 
 import numpy as np
 from typing import Tuple
+from src.utils.audio_ops import compute_rms, amplitude_to_db, db_to_amplitude
 
 
 def normalize_audio(
@@ -18,17 +19,8 @@ def normalize_audio(
     Returns:
         Normalized signal
     """
-    # Calculate RMS
-    rms = np.sqrt(np.mean(signal ** 2))
-    
-    # Avoid log(0)
-    rms = max(rms, 1e-10)
-    
-    # Calculate gain
-    current_db = 20 * np.log10(rms)
-    gain_db = target_db - current_db
-    gain_linear = 10 ** (gain_db / 20)
-    
+    current_db = amplitude_to_db(compute_rms(signal))
+    gain_linear = db_to_amplitude(target_db - current_db)
     return signal * gain_linear
 
 
@@ -61,16 +53,16 @@ def get_audio_statistics(signal: np.ndarray) -> dict:
     Returns:
         Dictionary with statistics
     """
-    rms = np.sqrt(np.mean(signal ** 2))
-    peak = np.max(np.abs(signal))
-    peak_db = 20 * np.log10(max(peak, 1e-10))
-    rms_db = 20 * np.log10(max(rms, 1e-10))
-    
+    rms = compute_rms(signal)
+    peak = float(np.max(np.abs(signal)))
+    peak_db = amplitude_to_db(peak)
+    rms_db = amplitude_to_db(rms)
+
     return {
-        'rms': float(rms),
-        'rms_db': float(rms_db),
-        'peak': float(peak),
-        'peak_db': float(peak_db),
+        'rms': rms,
+        'rms_db': rms_db,
+        'peak': peak,
+        'peak_db': peak_db,
         'crest_factor': float(peak / (rms + 1e-10)),
         'mean': float(np.mean(signal)),
         'std': float(np.std(signal))

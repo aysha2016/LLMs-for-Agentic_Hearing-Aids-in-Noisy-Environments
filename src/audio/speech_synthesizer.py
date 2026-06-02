@@ -6,6 +6,7 @@ import logging
 from typing import List, Dict, Tuple, Optional
 import os
 import tempfile
+from src.utils.audio_ops import resample_linear, add_noise_at_snr, normalize_signal
 
 logger = logging.getLogger(__name__)
 
@@ -222,12 +223,7 @@ class SpeechSynthesizer:
         Returns:
             Pitch-shifted audio
         """
-        # Resample to change pitch
-        new_length = int(len(audio) / factor)
-        indices = np.linspace(0, len(audio) - 1, new_length)
-        resampled = np.interp(indices, np.arange(len(audio)), audio)
-        
-        return resampled.astype(np.float32)
+        return resample_linear(audio, 1.0 / factor)
     
     def _resample(self, audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
         """
@@ -243,15 +239,7 @@ class SpeechSynthesizer:
         """
         if orig_sr == target_sr:
             return audio
-        
-        ratio = target_sr / orig_sr
-        new_length = int(len(audio) * ratio)
-        
-        # Linear interpolation resampling
-        indices = np.linspace(0, len(audio) - 1, new_length)
-        resampled = np.interp(indices, np.arange(len(audio)), audio)
-        
-        return resampled.astype(np.float32)
+        return resample_linear(audio, target_sr / orig_sr)
     
     def synthesize_dialogue(self, dialogue: List[Tuple[str, str]]) -> Dict[str, np.ndarray]:
         """
@@ -509,12 +497,5 @@ def create_noisy_speech(speech: np.ndarray, noise_type: str = "gaussian", snr_db
     else:
         noise = np.random.randn(len(speech)) * 0.05
     
-    # Normalize noise to achieve desired SNR
-    signal_power = np.mean(speech ** 2)
-    noise_power = np.mean(noise ** 2)
-    snr_linear = 10 ** (snr_db / 10)
-    noise_scaling = np.sqrt(signal_power / (snr_linear * noise_power))
-    
-    noisy_speech = speech + noise * noise_scaling
-    
+    noisy_speech = add_noise_at_snr(speech, noise, snr_db)
     return np.clip(noisy_speech, -1.0, 1.0).astype(np.float32)
