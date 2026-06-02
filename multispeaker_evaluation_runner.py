@@ -276,7 +276,7 @@ class MultiSpeakerTestRunner:
                     all_metrics.append(metrics)
                     
                 except Exception as e:
-                    logger.error(f"Error evaluating {scenario_name}: {e}")
+                    logger.error(f"Error evaluating {scenario_name}: {e}", exc_info=True)
         
         logger.info(f"✓ Evaluated {len(all_metrics)} scenarios")
         return all_metrics

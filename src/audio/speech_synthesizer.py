@@ -146,7 +146,8 @@ class SpeechSynthesizer:
             import librosa
             y, sr = librosa.load(mp3_path, sr=None)
             return y.astype(np.float32)
-        except:
+        except Exception as e:
+            logger.warning(f"librosa MP3 conversion failed: {e}. Trying pydub fallback.")
             try:
                 # Fallback: use pydub if available
                 from pydub import AudioSegment
@@ -156,8 +157,8 @@ class SpeechSynthesizer:
                     samples = samples.reshape((-1, 2)).mean(axis=1)
                 samples = samples / (2 ** 15)  # Normalize
                 return samples
-            except:
-                logger.error("Could not convert MP3. Please install librosa or pydub.")
+            except Exception as e2:
+                logger.error(f"Could not convert MP3 (librosa failed: {e}; pydub failed: {e2}). Please install librosa or pydub.")
                 return np.array([], dtype=np.float32)
     
     def _apply_emotion(self, audio: np.ndarray, emotion: str) -> np.ndarray:

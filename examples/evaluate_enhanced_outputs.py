@@ -14,7 +14,7 @@ try:
     from pystoi import stoi
 
     STOI_AVAILABLE = True
-except Exception:
+except ImportError:
     STOI_AVAILABLE = False
 
 import matplotlib.pyplot as plt
