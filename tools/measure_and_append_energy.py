@@ -18,6 +18,7 @@ The script updates `output_enhanced_speech/evaluation_matrix.csv`, adding
 import argparse
 import csv
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -158,12 +159,17 @@ def main():
     interval = max(0.05, args.interval)
     scenario = args.scenario
     run_cmd = args.run_cmd
-    csv_path = args.csv
+    csv_path = os.path.realpath(args.csv)
+
+    if not re.match(r'^[\w\-\.]+$', scenario):
+        print("Error: scenario name must be alphanumeric (plus hyphens/underscores/dots).", file=sys.stderr)
+        sys.exit(1)
 
     rapl_prev = None
     rapl_path = None
 
-    popen = subprocess.Popen(shlex.split(run_cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    cmd_parts = shlex.split(run_cmd)
+    popen = subprocess.Popen(cmd_parts, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     samples = []
     start = time.time()

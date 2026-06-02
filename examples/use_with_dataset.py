@@ -113,7 +113,7 @@ def process_numpy_dataset(npy_file_path):
     """Process audio data from numpy array files."""
     
     # Load numpy array
-    audio_data = np.load(npy_file_path)
+    audio_data = np.load(npy_file_path, allow_pickle=False)
     print(f"✓ Loaded numpy dataset: {npy_file_path}")
     print(f"  - Shape: {audio_data.shape}")
     
